@@ -1,7 +1,6 @@
 from flask import Flask, request
 from linebot import LineBotApi, WebhookHandler
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
-import os
+from linebot.models import *
 
 app = Flask(__name__)
 
@@ -11,181 +10,255 @@ LINE_CHANNEL_SECRET = "7bbf30cb8c46fc2cd23711c9ab8155c7"
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-from linebot.models import *
+###################################
+# 👑 الاونرز
+###################################
+owners = {"U55fb450e06025fe8a329ed942e65de04"}
 
-# ====== SETTINGS ======
-OWNERS = {"U55fb450e06025fe8a329ed942e65de04"}
+###################################
 # 🛡️ الادمنز
-ADMINS = set()
+###################################
+admins = set()
 
+###################################
 # 🚫 المحظورين
-BANNED = set()
+###################################
+banned = set()
 
-# 🔒 وضع القفل
-LOCKED = False
+###################################
+# 📊 نظام المراقبة
+###################################
+monitor_mode = False
+attendance = set()
 
 
-def is_owner(uid):
-    return uid in OWNERS
-
-
-def is_admin(uid):
-    return uid in ADMINS or uid in OWNERS
+@app.route("/callback", methods=['POST'])
+def callback():
+    signature = request.headers['X-Line-Signature']
+    body = request.get_data(as_text=True)
+    handler.handle(body, signature)
+    return 'OK'
 
 
 ###################################
-# 🔥 اوامر التحكم
+# 🔥 الاوامر
 ###################################
 
 @handler.add(MessageEvent, message=TextMessage)
-def control(event):
+def commands(event):
 
-    global LOCKED
+    global monitor_mode
 
-    user = event.source.user_id
-    text = event.message.text
-    group = getattr(event.source, "group_id", None)
+    user_id = event.source.user_id
+    text = event.message.text.lower()
+    group_id = getattr(event.source, "group_id", None)
 
-    if not group:
+    if not group_id:
         return
 
 
-    # 🔥 اختبار
-    if text == "ping":
+    ###################################
+    # ✅ فحص البوت
+    ###################################
+    if text in ["ping", "alive", "status"]:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage("🔥 بوت التحكم شغال!")
+            TextSendMessage("🔥 البوت شغال 100%")
         )
+        return
 
 
-    # 🔒 قفل الطوارئ
-    if LOCKED and not is_admin(user):
+    ###################################
+    # منع @all
+    ###################################
+    if "@all" in text and user_id not in admins and user_id not in owners:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage("🚫 ممنوع استخدام @all")
+        )
         return
 
 
     ###################################
     # رفع ادمن
     ###################################
-    if text == "رفع ادمن" and is_owner(user):
+    if text.startswith("رفع ادمن") and user_id in owners:
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
-                ADMINS.add(m.user_id)
+                admins.add(m.user_id)
 
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage("✅ تم رفع ادمن")
         )
+        return
 
 
     ###################################
     # تنزيل ادمن
     ###################################
-    if text == "تنزيل ادمن" and is_owner(user):
+    if text.startswith("تنزيل ادمن") and user_id in owners:
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
-                ADMINS.discard(m.user_id)
+                admins.discard(m.user_id)
 
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage("❌ تم تنزيل الادمن")
         )
+        return
+
+
+    ###################################
+    # رفع اونر
+    ###################################
+    if text.startswith("رفع اونر") and user_id in owners:
+
+        if event.message.mention:
+            for m in event.message.mention.mentionees:
+                owners.add(m.user_id)
+
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage("👑 تم رفع Owner")
+        )
+        return
+
+
+    ###################################
+    # طرد
+    ###################################
+    if text.startswith("طرد") and (user_id in owners or user_id in admins):
+
+        if event.message.mention:
+            for m in event.message.mention.mentionees:
+
+                if m.user_id in owners:
+                    continue
+
+                line_bot_api.kickout_from_group(group_id, [m.user_id])
+
+        return
 
 
     ###################################
     # حظر
     ###################################
-    if text == "حظر" and is_admin(user):
+    if text.startswith("حظر") and (user_id in owners or user_id in admins):
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
 
-                if is_owner(m.user_id):
-                    continue
+                banned.add(m.user_id)
 
-                BANNED.add(m.user_id)
+                line_bot_api.kickout_from_group(group_id, [m.user_id])
 
-                try:
-                    line_bot_api.kickout_from_group(group, [m.user_id])
-                except:
-                    pass
-
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage("🚫 تم حظر العضو")
-        )
+        return
 
 
     ###################################
     # فك الحظر
     ###################################
-    if text == "فك حظر" and is_owner(user):
+    if text.startswith("فك حظر") and user_id in owners:
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
-                BANNED.discard(m.user_id)
+                banned.discard(m.user_id)
 
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage("✅ تم فك الحظر")
         )
+        return
 
 
     ###################################
-    # قفل الجروب
+    # 🔥 تشغيل المراقبة
     ###################################
-    if text == "قفل" and is_admin(user):
-        LOCKED = True
+    if text == "تشغيل المراقبة" and user_id in owners:
+
+        monitor_mode = True
+        attendance.clear()
 
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage("🔒 تم قفل الجروب")
+            TextSendMessage(
+                "🔥 تم تشغيل المراقبة!\n\n"
+                "اكتب (تم) علشان تسجل حضورك 😈"
+            )
         )
+        return
 
 
     ###################################
-    # فتح الجروب
+    # 🔥 ايقاف المراقبة
     ###################################
-    if text == "فتح" and is_admin(user):
-        LOCKED = False
+    if text == "ايقاف المراقبة" and user_id in owners:
+
+        monitor_mode = False
+
+        if attendance:
+            report = "📊 الحاضرين:\n\n" + "\n".join(attendance)
+        else:
+            report = "محدش سجل حضور 😅"
 
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage("🔓 تم فتح الجروب")
+            TextSendMessage(report)
         )
+        return
 
 
     ###################################
-    # منع @all
+    # تسجيل الحضور
     ###################################
-    if "@all" in text and not is_admin(user):
+    if monitor_mode and text == "تم":
+
+        profile = line_bot_api.get_profile(user_id)
+        attendance.add(profile.display_name)
 
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage("🚫 ممنوع استخدام @all")
+            TextSendMessage(f"✅ {profile.display_name} حاضر!")
         )
+        return
 
 
 ###################################
-# 🔥 منع دخول المحظورين
+# 🚫 منع دخول المحظورين
 ###################################
 
 @handler.add(MemberJoinedEvent)
 def anti_banned(event):
 
-    group = event.source.group_id
+    group_id = event.source.group_id
 
     for member in event.joined.members:
 
-        if member.user_id in BANNED:
+        if member.user_id in banned:
             try:
-                line_bot_api.kickout_from_group(group, [member.user_id])
+                line_bot_api.kickout_from_group(group_id, [member.user_id])
             except:
                 pass
 
+
+###################################
+# 🔒 قفل QR
+###################################
+
+@handler.add(JoinEvent)
+def lock_qr(event):
+
+    try:
+        line_bot_api.update_group(
+            group_id=event.source.group_id,
+            prevent_join_by_ticket=True
+        )
+    except:
+        pass
+
+
 if __name__ == "__main__":
     app.run(port=5000)
-
-
-
