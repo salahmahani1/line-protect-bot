@@ -15,10 +15,14 @@ from linebot.models import *
 
 # ====== SETTINGS ======
 OWNERS = ["U55fb450e06025fe8a329ed942e65de04"]
+# 🛡️ الادمنز
 ADMINS = set()
+
+# 🚫 المحظورين
 BANNED = set()
+
+# 🔒 وضع القفل
 LOCKED = False
-# =====================
 
 
 def is_owner(uid):
@@ -26,28 +30,43 @@ def is_owner(uid):
 
 
 def is_admin(uid):
-    return uid in ADMINS or is_owner(uid)
+    return uid in ADMINS or uid in OWNERS
 
+
+###################################
+# 🔥 اوامر التحكم
+###################################
 
 @handler.add(MessageEvent, message=TextMessage)
 def control(event):
 
     global LOCKED
 
-    user_id = event.source.user_id
-    text = event.message.text.strip()
-    group_id = event.source.group_id
+    user = event.source.user_id
+    text = event.message.text
+    group = getattr(event.source, "group_id", None)
 
-
-    # 🔥 وضع الطوارئ
-    if LOCKED and not is_admin(user_id):
+    if not group:
         return
 
 
-    # ==================
+    # 🔥 اختبار
+    if text == "ping":
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage("🔥 بوت التحكم شغال!")
+        )
+
+
+    # 🔒 قفل الطوارئ
+    if LOCKED and not is_admin(user):
+        return
+
+
+    ###################################
     # رفع ادمن
-    # ==================
-    if text.startswith("رفع") and is_owner(user_id):
+    ###################################
+    if text == "رفع ادمن" and is_owner(user):
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
@@ -55,14 +74,14 @@ def control(event):
 
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage("✅ تم رفعه ادمن")
+            TextSendMessage("✅ تم رفع ادمن")
         )
 
 
-    # ==================
+    ###################################
     # تنزيل ادمن
-    # ==================
-    if text.startswith("تنزيل") and is_owner(user_id):
+    ###################################
+    if text == "تنزيل ادمن" and is_owner(user):
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
@@ -74,25 +93,10 @@ def control(event):
         )
 
 
-    # ==================
-    # رفع اونر
-    # ==================
-    if text.startswith("اونر") and is_owner(user_id):
-
-        if event.message.mention:
-            for m in event.message.mention.mentionees:
-                OWNERS.append(m.user_id)
-
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage("👑 تم رفع Owner")
-        )
-
-
-    # ==================
+    ###################################
     # حظر
-    # ==================
-    if text.startswith("حظر") and is_admin(user_id):
+    ###################################
+    if text == "حظر" and is_admin(user):
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
@@ -103,10 +107,7 @@ def control(event):
                 BANNED.add(m.user_id)
 
                 try:
-                    line_bot_api.kickout_from_group(
-                        group_id,
-                        [m.user_id]
-                    )
+                    line_bot_api.kickout_from_group(group, [m.user_id])
                 except:
                     pass
 
@@ -116,10 +117,10 @@ def control(event):
         )
 
 
-    # ==================
+    ###################################
     # فك الحظر
-    # ==================
-    if text.startswith("فك") and is_owner(user_id):
+    ###################################
+    if text == "فك حظر" and is_owner(user):
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
@@ -131,22 +132,22 @@ def control(event):
         )
 
 
-    # ==================
+    ###################################
     # قفل الجروب
-    # ==================
-    if text == "قفل" and is_admin(user_id):
+    ###################################
+    if text == "قفل" and is_admin(user):
         LOCKED = True
 
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage("🔒 تم قفل الجروب (وضع الطوارئ)")
+            TextSendMessage("🔒 تم قفل الجروب")
         )
 
 
-    # ==================
+    ###################################
     # فتح الجروب
-    # ==================
-    if text == "فتح" and is_admin(user_id):
+    ###################################
+    if text == "فتح" and is_admin(user):
         LOCKED = False
 
         line_bot_api.reply_message(
@@ -155,10 +156,10 @@ def control(event):
         )
 
 
-    # ==================
+    ###################################
     # منع @all
-    # ==================
-    if "@all" in text and not is_admin(user_id):
+    ###################################
+    if "@all" in text and not is_admin(user):
 
         line_bot_api.reply_message(
             event.reply_token,
@@ -166,26 +167,25 @@ def control(event):
         )
 
 
+###################################
 # 🔥 منع دخول المحظورين
-@handler.add(MemberJoinedEvent)
-def anti_ban(event):
+###################################
 
-    group_id = event.source.group_id
+@handler.add(MemberJoinedEvent)
+def anti_banned(event):
+
+    group = event.source.group_id
 
     for member in event.joined.members:
 
         if member.user_id in BANNED:
-
             try:
-                line_bot_api.kickout_from_group(
-                    group_id,
-                    [member.user_id]
-                )
+                line_bot_api.kickout_from_group(group, [member.user_id])
             except:
                 pass
 
-
 if __name__ == "__main__":
     app.run(port=5000)
+
 
 
