@@ -14,7 +14,7 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 from linebot.models import *
 
 # ====== SETTINGS ======
-OWNERS = ["U55fb450e06025fe8a329ed942e65de04"]
+OWNERS = {"U55fb450e06025fe8a329ed942e65de04"}
 # 🛡️ الادمنز
 ADMINS = set()
 
