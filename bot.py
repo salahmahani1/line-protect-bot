@@ -68,7 +68,7 @@ def handle_message(event):
 # 👢 Kick (طرد بدون حظر)
 ###################################
 
-if msg == "!kick" and user in admins.union(owners):
+if msg == ".k" and user in admins.union(owners):
 
     if event.message.mention:
 
