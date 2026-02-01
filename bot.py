@@ -20,11 +20,15 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    if event.message.text == "ping":
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="🔥 البوت شغال!")
-        )
+
+    user_id = event.source.user_id
+
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=f"Your ID: {user_id}")
+    )
+
 
 if __name__ == "__main__":
     app.run(port=5000)
+
