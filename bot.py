@@ -64,7 +64,30 @@ def handle_message(event):
         )
         return
 
+###################################
+# 👢 Kick (طرد بدون حظر)
+###################################
 
+if msg == "!kick" and user in admins.union(owners):
+
+    if event.message.mention:
+
+        for m in event.message.mention.mentionees:
+
+            # مستحيل تطرد Owner
+            if m.user_id in owners:
+                continue
+
+            try:
+                line_bot_api.kickout_from_group(
+                    group,
+                    [m.user_id]
+                )
+            except:
+                pass
+
+    return
+    
     ###################################
     # 🚨 LOCKDOWN
     ###################################
