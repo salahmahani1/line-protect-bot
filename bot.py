@@ -109,7 +109,7 @@ def handle_message(event):
     # Alive
     ###################################
 
-    if msg in ["alive", "ping"]:
+    if msg in [".c", "ping"]:
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage("🔥 البوت شغال تمام")
@@ -145,7 +145,7 @@ def handle_message(event):
     # رفع ادمن بالمنشن
     ###################################
 
-    if msg == "!admin" and user in owners:
+    if msg == ".admin" and user in owners:
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
@@ -163,7 +163,7 @@ def handle_message(event):
     # تنزيل ادمن
     ###################################
 
-    if msg == "!unadmin" and user in owners:
+    if msg == ".unadmin" and user in owners:
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
@@ -180,7 +180,7 @@ def handle_message(event):
     # Kick
     ###################################
 
-    if msg == "!kick":
+    if msg == ".k":
 
         if event.message.mention:
             for m in event.message.mention.mentionees:
