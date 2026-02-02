@@ -21,24 +21,16 @@ app = Flask(__name__)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-# ================= 🤣 قائمة الردود الساخرة (تعمل دائماً) =================
-funny_replies = [
-    "عايز ايه يا ابني؟ انا مش فاضيلك 😒",
-    "يا ساتر.. كل شوية منشن منشن! 🤯",
-    "المنشن بفلوس على فكرة 💸",
-    "أنا نايم، تعال بكره 😴",
-    "حد يقوله يسكت والنبي 😂",
-    "نعم؟ لبيك شبيك البوت بين ايديك 🧞‍♂️",
-    "مش هرد عليك عشان شكلك مش عاجبني 🌚",
-    "يا ابني ركز في مستقبلك وسيب البوت 📖",
-    "لا إله إلا الله.. عايز ايه؟ 😂",
-    "بحبك بس ما تكررهاش تاني ❤️",
-    "انت بتناديني ليه؟ انا شغال عندك؟ 🤨",
-    "سمعتك من اول مرة والله 👂",
-    "جروب كله رغي مفيش فايدة 🗣️",
-    "طب قول 'يا عم البوت' طيب احترمني! 😎",
-    "فاضي شوية نشرب قهوة في حتة بعيدة؟ ☕",
-    "أيوة أنا البوت.. الامضاء: ذكاء اصطناعي زهقان 🤖"
+# ================= 🤖 ردود لما حد ينادي البوت =================
+bot_call_replies = [
+    "عيون البوت 👀",
+    "نعم؟ عايز ايه؟ 🤖",
+    "مش فاضي بلعب، قول بسرعة 🎮",
+    "لبيك شبيك البوت بين ايديك 🧞‍♂️",
+    "يا اخي سيبني انام شوية 😴",
+    "سمعتك والله، نعم؟",
+    "آمر تدلل يا غالي ❤️",
+    "موجود 24 ساعة عشانك 😎"
 ]
 
 # ================= إدارة الملفات =================
@@ -53,15 +45,16 @@ def save_json(file, data):
         json.dump(data, f, ensure_ascii=False)
 
 questions = load_json("questions.json", [{"q": "عاصمة مصر؟", "a": "القاهرة"}])
-
-# ✅ الآن يتم تحميل الكلمات من الملف words.json تلقائياً
-words = load_json("words.json", ["تفاحة", "موز", "برتقال"]) 
-
+words = load_json("words.json", ["تفاحة"]) 
 race_data = load_json("race.json", ["سبحان الله"])
 tf_data = load_json("truefalse.json", [{"q": "الشمس تدور حول الأرض", "a": "غلط"}])
 points = load_json("points.json", {})
 admins = load_json("admins.json", [OWNER_ID])
 if OWNER_ID not in admins: admins.append(OWNER_ID)
+
+# ✅ ملف جديد لحفظ إعدادات الجروبات (مين مفعل المنشن ومين لا)
+# الشكل: {"mention_enabled_groups": ["group_id_1", "group_id_2"]}
+group_settings = load_json("settings.json", {"mention_enabled_groups": []})
 
 GAMES_ENABLED = True 
 active_games = {} 
@@ -95,7 +88,7 @@ def callback():
 # ================= معالجة الرسائل =================
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    global GAMES_ENABLED, active_games, admins, points
+    global GAMES_ENABLED, active_games, admins, points, group_settings
     
     msg = event.message.text.strip()
     user_id = event.source.user_id
@@ -109,7 +102,7 @@ def handle_message(event):
         api = MessagingApi(api_client)
         reply = None
 
-        # 👑 1. التحكم
+        # 👑 1. التحكم والإدارة
         if msg == "قفل اللعب" or msg == "قفل":
             if user_id in admins:
                 GAMES_ENABLED = False
@@ -124,6 +117,29 @@ def handle_message(event):
                 reply = "🔓 تم فتح الألعاب!"
             else:
                 reply = "❌ انتظر الأدمن."
+        
+        # ✅ أوامر التحكم في المنشن (جديد)
+        elif msg == "تفعيل المنشن":
+            if user_id in admins:
+                if room_id not in group_settings["mention_enabled_groups"]:
+                    group_settings["mention_enabled_groups"].append(room_id)
+                    save_json("settings.json", group_settings)
+                    reply = "🔔 تم تفعيل التدخل في المنشنات لهذا الجروب!"
+                else:
+                    reply = "هو مفعل بالفعل! 😉"
+            else:
+                reply = "❌ للأدمن فقط."
+
+        elif msg == "تعطيل المنشن":
+            if user_id in admins:
+                if room_id in group_settings["mention_enabled_groups"]:
+                    group_settings["mention_enabled_groups"].remove(room_id)
+                    save_json("settings.json", group_settings)
+                    reply = "🔕 تم إيقاف التدخل في المنشنات."
+                else:
+                    reply = "هو معطل بالفعل!"
+            else:
+                reply = "❌ للأدمن فقط."
 
         elif msg.startswith("رفع ادمن") and user_id == OWNER_ID:
             for new_admin in mentionees:
@@ -154,14 +170,27 @@ def handle_message(event):
 3️⃣ صح غلط
 4️⃣ سباق
             
-🛑 للحذف اكتب: حذف
+🔔 للتحكم بالمنشن:
+- تفعيل المنشن
+- تعطيل المنشن
+
 🏆 للنقاط اكتب: توب"""
 
-        # 🤣 3. الردود الساخرة (تعمل دائماً)
-        elif mentionees and not msg.startswith(("رفع", "تنزيل")):
-             reply = random.choice(funny_replies)
+        # 🤖 3. (أ) لو نادى البوت (يعمل دائماً)
+        elif msg in ["بوت", "يا بوت", "bot", "Bot", "البوت"]:
+             reply = random.choice(bot_call_replies)
 
-        # 🎮 4. الألعاب (تعمل فقط لو مفتوحة)
+        # 😂 3. (ب) لو منشن شخص تاني (يعمل فقط لو الجروب مفعل)
+        elif mentionees and not msg.startswith(("رفع", "تنزيل")):
+             # الشرط السحري: هل هذا الجروب موجود في قائمة المسموح لهم؟
+             if room_id in group_settings["mention_enabled_groups"]:
+                 if words:
+                     random_word = random.choice(words)
+                     reply = f"{random_word} 🌚"
+                 else:
+                     reply = "عينك في عينك كدا؟ 👀"
+
+        # 🎮 4. الألعاب
         elif GAMES_ENABLED:
             
             if msg in ["سؤال", "رتب", "سباق", "صح غلط"] and room_id in active_games:
@@ -178,7 +207,7 @@ def handle_message(event):
                 reply = f"🤔 صح أم خطأ؟\n{q['q']}"
 
             elif msg == "رتب":
-                w = random.choice(words) # يقرأ من ملف words.json
+                w = random.choice(words)
                 scrambled = "".join(random.sample(w, len(w)))
                 active_games[room_id] = {"a": w, "p": 2}
                 reply = f"✏️ رتب: {scrambled}"
