@@ -1,10 +1,10 @@
 from flask import Flask, request, abort
-import json, random, os, re
+import json, random, os, re, threading, time
 from difflib import SequenceMatcher
 
 from linebot.v3.messaging import (
     MessagingApi, Configuration, ApiClient,
-    ReplyMessageRequest, TextMessage
+    ReplyMessageRequest, PushMessageRequest, TextMessage
 )
 from linebot.v3.webhook import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -14,6 +14,7 @@ from linebot.v3.exceptions import InvalidSignatureError
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
 
+# 🔴 مهم جداً: ضع الـ ID الخاص بك هنا لتكون أنت "المالك الأساسي"
 OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d"
 
 app = Flask(__name__)
@@ -43,9 +44,11 @@ race_data = load_json("race.json", ["سبحان الله"])
 tf_data = load_json("truefalse.json", [{"q": "النار باردة", "a": "غلط"}])
 f3alyat_list = load_json("f3alyat.json", ["صور خلفية جوالك"])
 points = load_json("points.json", {})
+# تحميل قائمة الأدمنز
 admins = load_json("admins.json", [OWNER_ID])
 if OWNER_ID not in admins: admins.append(OWNER_ID)
 group_settings = load_json("settings.json", {"mention_enabled_groups": []})
+all_groups = load_json("all_groups.json", [])
 
 # متغيرات النظام
 GAMES_ENABLED = True 
@@ -56,7 +59,15 @@ tournament = {
     "current_match": None, "round_num": 1
 }
 
-# ================= 🧠 الذكاء الاصطناعي (معالجة النصوص) =================
+# ================= قائمة الأذكار =================
+dhikr_list = [
+    "سبحان الله وبحمده، سبحان الله العظيم 🌿",
+    "أستغفر الله العظيم وأتوب إليه 🤲",
+    "لا حول ولا قوة إلا بالله العلي العظيم 💪",
+    "اللهم صل وسلم على نبينا محمد ﷺ ❤️"
+]
+
+# ================= 🧠 الذكاء الاصطناعي =================
 def normalize(text):
     text = str(text).lower().strip()
     text = re.sub(r'[أإآ]', 'ا', text)
@@ -66,24 +77,13 @@ def normalize(text):
     return text
 
 def is_match(user_input, commands_list):
-    if isinstance(commands_list, str):
-        commands_list = [commands_list]
-        
+    if isinstance(commands_list, str): commands_list = [commands_list]
     u = normalize(user_input)
-    
     for cmd in commands_list:
         c = normalize(cmd)
-        
-        # تطابق تام (للحروف القصيرة زي .h)
         if u == c: return True
-        
-        # لو الأمر طويل، نقبل بدايته
         if len(c) > 2 and u.startswith(c) and len(u) < len(c) + 5: return True
-
-        # تطابق تقريبي (للأوامر الطويلة فقط)
-        if len(c) > 3 and SequenceMatcher(None, u, c).ratio() > 0.85:
-            return True
-            
+        if len(c) > 3 and SequenceMatcher(None, u, c).ratio() > 0.85: return True
     return False
 
 def is_correct_answer(user_ans, correct_ans):
@@ -91,9 +91,25 @@ def is_correct_answer(user_ans, correct_ans):
     c = normalize(correct_ans)
     return u == c or SequenceMatcher(None, u, c).ratio() > 0.7
 
+# ================= ⏰ الأذكار التلقائية =================
+def send_dhikr_periodic():
+    while True:
+        time.sleep(5 * 60 * 60) # 5 ساعات
+        dhikr = random.choice(dhikr_list)
+        with ApiClient(configuration) as api_client:
+            api = MessagingApi(api_client)
+            for group_id in list(all_groups):
+                try:
+                    api.push_message(PushMessageRequest(to=group_id, messages=[TextMessage(text=f"📢 تذكير:\n{dhikr}")]))
+                    time.sleep(1) 
+                except: pass
+
+dhikr_thread = threading.Thread(target=send_dhikr_periodic, daemon=True)
+dhikr_thread.start()
+
 # ================= السيرفر =================
 @app.route("/", methods=['GET'])
-def home(): return "BOT IS READY (.h ADDED) 🧠🔥"
+def home(): return "BOT READY (ADMINS UPDATE) 🔥"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -108,12 +124,16 @@ def callback():
 # ================= معالجة الرسائل =================
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    global tournament, GAMES_ENABLED, active_games, points, group_settings, admins
+    global tournament, GAMES_ENABLED, active_games, points, group_settings, admins, all_groups
     
     msg = event.message.text.strip()
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
     
+    if (room_id.startswith("C") or room_id.startswith("G")) and room_id not in all_groups:
+        all_groups.append(room_id)
+        save_json("all_groups.json", all_groups)
+
     mentionees = []
     if event.message.mention:
         mentionees = [m.user_id for m in event.message.mention.mentionees]
@@ -126,9 +146,60 @@ def handle_message(event):
 
         reply = None
 
-        # 👑 1. التحكم والإدارة
-        
-        if is_match(msg, ["قفل اللعب", "قفل"]):
+        # 👑 ================= إدارة الأدمنز (جديد) ================= 👑
+
+        # 1. معرفة الآيدي (عشان المالك يعرف نفسه)
+        if is_match(msg, ["ايدي", "id", "my id"]):
+            reply = f"🆔 الآيدي الخاص بك:\n{user_id}"
+
+        # 2. عرض قائمة الأدمنز
+        elif is_match(msg, ["الادمن", "المشرفين", "الاونر", "admins"]):
+            txt = "👑 قائمة المشرفين:\n"
+            for admin_id in admins:
+                try:
+                    name = api.get_profile(admin_id).display_name
+                    role = " (مالك) 🌟" if admin_id == OWNER_ID else ""
+                    txt += f"- {name}{role}\n"
+                except:
+                    txt += f"- مستخدم غير معروف ({admin_id[:4]}...)\n"
+            reply = txt
+
+        # 3. رفع أدمن (للمالك فقط)
+        elif is_match(msg, ["رفع ادمن", "ترقية"]) and user_id == OWNER_ID:
+            if mentionees:
+                added_names = []
+                for m_id in mentionees:
+                    if m_id not in admins:
+                        admins.append(m_id)
+                        try: added_names.append(api.get_profile(m_id).display_name)
+                        except: added_names.append("عضو")
+                save_json("admins.json", admins)
+                if added_names:
+                    reply = f"✅ تم ترقية: {', '.join(added_names)} ليصبحوا أدمن."
+                else:
+                    reply = "هم أدمن بالفعل! 😅"
+            else:
+                reply = "❌ لازم تمنشن الشخص اللي عايز ترفعه!"
+
+        # 4. تنزيل أدمن (للمالك فقط)
+        elif is_match(msg, ["تنزيل ادمن", "ازالة ادمن", "تنزيل"]) and user_id == OWNER_ID:
+            if mentionees:
+                removed_names = []
+                for m_id in mentionees:
+                    if m_id in admins and m_id != OWNER_ID: # المالك لا يُحذف
+                        admins.remove(m_id)
+                        try: removed_names.append(api.get_profile(m_id).display_name)
+                        except: removed_names.append("عضو")
+                save_json("admins.json", admins)
+                if removed_names:
+                    reply = f"🗑️ تم تنزيل: {', '.join(removed_names)}."
+                else:
+                    reply = "هم ليسوا أدمن أصلاً (أو حاولت تنزيل المالك)!"
+            else:
+                reply = "❌ لازم تمنشن الشخص!"
+
+        # 🕹️ ================= التحكم في الألعاب =================
+        elif is_match(msg, ["قفل اللعب", "قفل"]):
             if user_id in admins:
                 GAMES_ENABLED = False
                 active_games.pop(room_id, None)
@@ -157,7 +228,7 @@ def handle_message(event):
                     reply = "🔕 تم قفل المنشن."
                 else: reply = "مقفول بالفعل."
 
-        # أوامر البطولة
+        # 🏆 ================= البطولة =================
         elif is_match(msg, ["بطولة", "بطوله"]) and user_id in admins:
             tournament = {"state": "REGISTER", "players": [], "names": {}, "bracket": [], "winners": [], "current_match": None, "round_num": 1}
             reply = "🏆 تم فتح باب التسجيل للبطولة!\nاكتب ( سجلني ) للمشاركة 🔥"
@@ -187,7 +258,7 @@ def handle_message(event):
                 reply = "🏳️ تم حذف اللعبة."
             else: reply = "مفيش لعبة."
 
-        # 🏆 2. تفاعل البطولة
+        # تفاعل البطولة
         elif is_match(msg, ["سجلني", "سجل"]) and tournament["state"] == "REGISTER":
             if user_id not in tournament["players"]:
                 tournament["players"].append(user_id)
@@ -242,15 +313,20 @@ def handle_message(event):
                         match["q_data"] = random.choice(questions)
                         reply = f"✅ صح!\nالسؤال {match['q_count']}:\n{match['q_data']['q']}"
 
-        # 🎮 3. الألعاب العادية
+        # 🎮 ================= الألعاب العادية =================
         elif GAMES_ENABLED and tournament["state"] != "MATCH_ACTIVE":
-            
-            # ✅ هنا التغيير: تم إضافة .h لتعرض القائمة
             if is_match(msg, [".h", "help", "menu", "الاوامر", "اوامر"]):
-                reply = "🎮 الأوامر:\nسؤال، رتب، صح غلط، سباق، فعالية، توب\n\n🏆 البطولة:\nسجلني، جاهز\n\n👮‍♂️ (للأدمن): بطولة، ابدأ، قفل/فتح، تفعيل/قفل المنشن"
+                reply = """🎮 الألعاب:
+سؤال، رتب، صح غلط، سباق، فعالية، توب
 
-            elif is_match(msg, ["سؤال", "رتب", "سباق", "صح غلط"]) and room_id in active_games:
-                reply = "⛔ فيه لعبة شغالة! كملوها أو اكتبوا 'حذف'."
+🏆 البطولة:
+سجلني، جاهز
+
+👮‍♂️ الإدارة:
+الادمن (لعرض المشرفين)
+رفع ادمن @ (للمالك)
+تنزيل ادمن @ (للمالك)
+بطولة، ابدأ، قفل/فتح"""
 
             elif is_match(msg, ["سؤال", "اسئلة"]):
                 q = random.choice(questions)
