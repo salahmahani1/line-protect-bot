@@ -1,5 +1,3 @@
-
-
 from flask import Flask, request, abort
 import json, random, time
 
