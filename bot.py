@@ -1,6 +1,5 @@
 from flask import Flask, request, abort
-import random, json, os, time
-from deep_translator import GoogleTranslator
+import os, json, random, time, threading
 
 from linebot.v3.messaging import (
     MessagingApi, Configuration, ApiClient,
@@ -12,100 +11,76 @@ from linebot.v3.exceptions import InvalidSignatureError
 
 app = Flask(__name__)
 
-CHANNEL_ACCESS_TOKEN = "QPrjs2oE0WkxeQqXZKUy8eDjfK4kY2iD3bg3iDaE09doEdXp9+C1203rzMyz+UWHDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3Z+GfADLEe2xv89bBYFqRg6ritVwXIPLFQBnWrM/7ITMAdB04t89/1O/w1cDnyilFU="
-CHANNEL_SECRET = "7768432715f1e544354aa28f3b68ac0e"
+CHANNEL_ACCESS_TOKEN = os.getenv(""QPrjs2oE0WkxeQqXZKUy8eDjfK4kY2iD3bg3iDaE09doEdXp9+C1203rzMyz+UWHDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3Z+GfADLEe2xv89bBYFqRg6ritVwXIPLFQBnWrM/7ITMAdB04t89/1O/w1cDnyilFU=")
+CHANNEL_SECRET = os.getenv("7768432715f1e544354aa28f3b68ac0e")
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-# ==============================
-# STORAGE
-# ==============================
+# ================= LOAD DATA =================
 
-POINTS_FILE = "points.json"
+def load_json(file):
+    with open(file, "r") as f:
+        return json.load(f)
 
-if os.path.exists(POINTS_FILE):
-    with open(POINTS_FILE, "r") as f:
-        points = json.load(f)
-else:
-    points = {}
+questions_data = load_json("questions.json")
+words_data = load_json("words.json")
+race_data = load_json("race.json")
+tf_data = load_json("truefalse.json")
 
-def save_points():
-    with open(POINTS_FILE, "w") as f:
-        json.dump(points, f)
 
-def add_point(user_id, amount=1):
-    points[user_id] = points.get(user_id, 0) + amount
-    save_points()
+# ================= QUEUE SYSTEM =================
 
-# ==============================
-# PERFORMANCE
-# ==============================
+def create_queue(data):
+    q = data.copy()
+    random.shuffle(q)
+    return q
+
+questions_queue = create_queue(questions_data)
+words_queue = create_queue(words_data)
+race_queue = create_queue(race_data)
+tf_queue = create_queue(tf_data)
+
+# ================= STORAGE =================
+
+points = {}
+
+def add_point(user, amount=1):
+    points[user] = points.get(user, 0) + amount
+
+# ================= PERFORMANCE =================
 
 user_cache = {}
 last_message = {}
-daily_salary = {}
 
-# ==============================
-# SMART REPLIES
-# ==============================
+# ================= GAME STATE =================
 
-smart_replies = {
-    "السلام عليكم": "وعليكم السلام 😄🔥",
-    "صباح الخير": "صباح الفل ☀️",
-    "مساء الخير": "مساء العسل 😏",
-    "بحبك": "وانا كمان 😂❤️"
-}
-
-# ==============================
-# GAMES DATA
-# ==============================
-
-number_to_guess = None
 current_answer = None
 current_word = None
+race_text = None
+tf_answer = None
+round_active = False
 
-questions = [
-    {"q": "مين غنى تملي معاك؟", "a": "عمرو دياب"},
-    {"q": "عاصمة فرنسا؟", "a": "باريس"},
-]
 
-fast_words = [
+# ================= FAST WORD =================
 
-"كمبيوتر","موبايل","شاشة","كيبورد","سماعة","تكنولوجيا","برمجة",
-"ذكاء","روبوت","انترنت","متصفح","جوجل","يوتيوب","تطبيق",
-"هاتف","بطارية","شاحن","كاميرا","ميكروفون","هارد","رام",
+def scramble(word):
+    mixed = word
+    while mixed == word:
+        mixed = ''.join(random.sample(word, len(word)))
+    return mixed
 
-"سيارة","طائرة","قطار","سفينة","دراجة","محرك","سرعة",
-"طريق","اشارة","وقود","فرامل","مقود",
 
-"مدرسة","جامعة","مدرس","طالب","واجب","امتحان","قلم",
-"كراسة","كتاب","مكتبة","فصل","سبورة",
+def next_word():
+    global words_queue
 
-"قهوة","شاي","عصير","بيتزا","برجر","مكرونة","شوربة",
-"سلطة","شوكولاتة","بسكويت","فطار","غداء","عشاء",
+    if not words_queue:
+        words_queue = create_queue(words_data)
 
-"كرة","ملعب","هدف","حارس","مدافع","مهاجم","بطولة",
-"كأس","مباراة","جمهور","مدرب",
+    return words_queue.pop()
 
-"مطر","شمس","رياح","سحاب","صيف","شتاء","خريف","ربيع",
-"بحر","نهر","جبل","صحراء",
 
-"قطة","كلب","حصان","اسد","نمر","فيل","زرافة",
-"قرد","ذئب","دب",
-
-"شرطة","طبيب","مهندس","طيار","نجار","حداد","خباز",
-"مزارع","جندي",
-
-"موسيقى","اغنية","فيلم","مسلسل","مسرح","تمثيل",
-"مخرج","ممثل","تصوير",
-
-"نجاح","فشل","حلم","امل","قوة","صبر","ذكاء","شجاعة"
-
-]
-# ==============================
-# WEBHOOK
-# ==============================
+# ================= WEBHOOK =================
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -116,8 +91,6 @@ def callback():
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
-    except Exception as e:
-        print("Webhook Crash:", e)
 
     return 'OK'
 
@@ -125,11 +98,13 @@ def callback():
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
 
+    global current_answer, current_word, race_text, tf_answer, round_active
+
     try:
-        user_message = event.message.text.strip().lower()
+        msg = event.message.text.strip().lower()
         user_id = event.source.user_id
 
-        # 🚫 Anti-Spam
+        # 🚫 Anti Spam
         now = time.time()
         if user_id in last_message:
             if now - last_message[user_id] < 1:
@@ -137,251 +112,150 @@ def handle_message(event):
         last_message[user_id] = now
 
         with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
+            api = MessagingApi(api_client)
 
-            # ⚡ Cached username
-            if user_id in user_cache:
-                username = user_cache[user_id]
-            else:
-                try:
-                    if event.source.type == "group":
-                        profile = line_bot_api.get_group_member_profile(
-                            event.source.group_id, user_id
-                        )
-                    else:
-                        profile = line_bot_api.get_profile(user_id)
-
-                    username = profile.display_name
-                    user_cache[user_id] = username
-                except:
-                    username = "Player 😄"
+            username = user_cache.get(user_id, "Player")
+            user_cache[user_id] = username
 
             reply = None
 
-            # ==============================
-            # MENU
-            # ==============================
+            # ================= MENU =================
 
-            if user_message in ["العاب","menu","help"]:
+            if msg in ["اوامر","menu"]:
                 reply = """
-🔥 اوامر البوت 🔥
+🔥 GAME BOT 🔥
 
-🎮 العاب:
-لعبة ارقام
-سوال
-مين الاسرع
-حجر / ورقة / مقص
-
-💰 اقتصاد:
-نقاطي
-توب
-راتب
-لف
-سرقة
-
-🧠 أدوات:
-احسب 5+5
-ترجم hello
-
-🗣️ قول كلام
+🧠 سؤال
+⚡ مين الأسرع
+🏁 سباق
+✔️ صح ولا غلط
+🏆 نقاطي
+🥇 توب
 """
 
-            # ==============================
-            # SAY
-            # ==============================
+            # ================= QUESTIONS =================
 
-            elif user_message.startswith("قول "):
-                text = event.message.text[4:]
+            elif msg == "سؤال":
 
-                if "@all" in text.lower():
-                    reply = "😈 مش هلعب اللعبة دي"
-                else:
-                    reply = text
+                global questions_queue
 
-            # ==============================
-            # CALCULATOR
-            # ==============================
+                if not questions_queue:
+                    questions_queue = create_queue(questions_data)
 
-            elif user_message.startswith("احسب"):
-                try:
-                    equation = event.message.text.replace("احسب","").strip()
+                q = questions_queue.pop()
 
-                    allowed="0123456789+-*/(). "
-                    if not all(c in allowed for c in equation):
-                        reply="❌ عملية غير مسموحة"
-                    else:
-                        result=eval(equation)
-                        reply=f"🧮 الناتج = {result}"
+                current_answer = q["a"].lower()
 
-                except:
-                    reply="اكتب كده:\nاحسب 5+5"
+                reply = f"🧠 {q['q']}"
 
-            # ==============================
-            # TRANSLATE
-            # ==============================
+            elif current_answer and current_answer in msg:
 
-            elif user_message.startswith("ترجم"):
-                try:
-                    text=event.message.text.replace("ترجم","").strip()
-                    translated=GoogleTranslator(source='auto', target='ar').translate(text)
+                add_point(user_id,2)
+                reply = "🔥 إجابة صحيحة!"
 
-                    reply=f"🌍 الترجمة:\n{translated}"
+                current_answer = None
 
-                except:
-                    reply="اكتب:\nترجم hello"
 
-            # ==============================
-            # SMART REPLIES
-            # ==============================
+            # ================= FAST GAME =================
 
-            elif user_message in smart_replies:
-                reply = smart_replies[user_message]
+            elif msg == "مين الأسرع":
 
-            # ==============================
-            # GUESS NUMBER
-            # ==============================
+                word = next_word()
+                current_word = word
+                round_active = True
 
-            global number_to_guess
+                scrambled = scramble(word)
 
-            if user_message == "لعبة ارقام":
-                number_to_guess = random.randint(1,10)
-                reply="🎯 خمنت رقم من 1 لـ10"
+                reply = f"⚡ رتب الكلمة:\n🔥 {scrambled}"
 
-            elif user_message.isdigit() and number_to_guess:
-                if int(user_message)==number_to_guess:
-                    add_point(user_id)
-                    reply=f"🔥 مبروك {username} +1 نقطة"
-                    number_to_guess=None
-                else:
-                    reply="❌ غلط"
+            elif round_active and msg == current_word:
 
-            # ==============================
-            # QUESTION
-            # ==============================
+                add_point(user_id,2)
 
-            global current_answer
+                reply = "🚀 أسرع واحد!"
 
-            if user_message=="سوال":
-                q=random.choice(questions)
-                current_answer=q["a"].lower()
-                reply=q["q"]
+                current_word = None
+                round_active = False
 
-            elif current_answer and user_message==current_answer:
-                add_point(user_id)
-                reply=f"🔥 صح يا {username}"
-                current_answer=None
 
-            # ==============================
-            # FAST WORD
-            # ==============================
+            # ================= RACE =================
 
-            global current_word
+            elif msg == "سباق":
 
-            if user_message=="مين الاسرع":
-                current_word=random.choice(fast_words)
-                scrambled = ''.join(random.sample(current_word.replace(" ",""), len(current_word.replace(" ",""))))
-                reply=f"⚡ رتب الكلمة:\n{scrambled}"
+                global race_queue
 
-            elif current_word and user_message==current_word:
-                add_point(user_id)
-                reply=f"🚀 {username} كسب!"
-                current_word=None
+                if not race_queue:
+                    race_queue = create_queue(race_data)
 
-            # ==============================
-            # ROCK PAPER SCISSORS
-            # ==============================
+                race_text = race_queue.pop().lower()
 
-            if user_message in ["حجر","ورقة","مقص"]:
-                choices=["حجر","ورقة","مقص"]
-                bot=random.choice(choices)
+                reply = f"🏁 اكتب:\n{race_text}"
 
-                if user_message==bot:
-                    reply=f"🤝 تعادل! اخترت {bot}"
+            elif race_text and msg == race_text:
 
-                elif (
-                    (user_message=="حجر" and bot=="مقص") or
-                    (user_message=="ورقة" and bot=="حجر") or
-                    (user_message=="مقص" and bot=="ورقة")
-                ):
-                    add_point(user_id)
-                    reply=f"🔥 كسبت! اخترت {bot}"
+                add_point(user_id,2)
+                reply = "🔥 فاز بالسباق!"
 
-                else:
-                    reply=f"😈 خسرت! اخترت {bot}"
+                race_text = None
 
-            # ==============================
-            # ECONOMY
-            # ==============================
 
-            elif user_message=="نقاطي":
-                reply=f"🏆 معاك {points.get(user_id,0)} نقطة"
+            # ================= TRUE FALSE =================
 
-            elif user_message=="توب":
+            elif msg == "صح ولا غلط":
 
-                if not points:
-                    reply="لسه محدش لعب 😄"
-                else:
-                    top=sorted(points.items(),key=lambda x:x[1],reverse=True)[:10]
+                global tf_queue
+
+                if not tf_queue:
+                    tf_queue = create_queue(tf_data)
+
+                q = tf_queue.pop()
+
+                tf_answer = q["a"].lower()
+
+                reply = f"🧠 {q['q']}"
+
+            elif tf_answer and msg == tf_answer:
+
+                add_point(user_id,2)
+                reply = "✔️ صح!"
+
+                tf_answer = None
+
+
+            # ================= POINTS =================
+
+            elif msg == "نقاطي":
+                reply = f"🏆 معاك {points.get(user_id,0)} نقطة"
+
+            elif msg == "توب":
+
+                if points:
+                    top = sorted(points.items(),
+                                 key=lambda x:x[1],
+                                 reverse=True)[:10]
 
                     text="🥇 التوب:\n"
-                    for i,(uid,score) in enumerate(top,start=1):
-                        name=user_cache.get(uid,"Player")
-                        text+=f"{i}- {name} ({score})\n"
+
+                    for i,(u,s) in enumerate(top,start=1):
+                        text+=f"{i}- {user_cache.get(u,'Player')} ({s})\n"
 
                     reply=text
 
-            elif user_message=="راتب":
 
-                if user_id in daily_salary and now-daily_salary[user_id]<86400:
-                    reply="⏳ تعالا بكرة 😄"
-                else:
-                    salary=random.randint(5,15)
-                    add_point(user_id,salary)
-                    daily_salary[user_id]=now
-                    reply=f"💰 قبضت {salary} نقطة!"
-
-            elif user_message=="لف":
-
-                prizes=[-3,-1,1,2,5,10]
-                prize=random.choice(prizes)
-                add_point(user_id,prize)
-
-                if prize>0:
-                    reply=f"🎰 كسبت {prize} نقاط!"
-                else:
-                    reply=f"💀 خسرت {abs(prize)}"
-
-            elif user_message=="سرقة":
-
-                success=random.choice([True,False])
-
-                if success:
-                    amount=random.randint(1,5)
-                    add_point(user_id,amount)
-                    reply=f"😈 سرقت {amount} نقاط!"
-                else:
-                    add_point(user_id,-2)
-                    reply="🚔 اتمسكت! -2 نقاط"
-
-            # ==============================
-            # SAFE REPLY
-            # ==============================
+            # ================= SAFE REPLY =================
 
             if reply:
-                try:
-                    line_bot_api.reply_message(
-                        ReplyMessageRequest(
-                            reply_token=event.reply_token,
-                            messages=[TextMessage(text=reply)]
-                        )
+                api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply)]
                     )
-                except Exception as e:
-                    print("Reply Error:",e)
+                )
 
     except Exception as e:
-        print("🔥 BOT CRASH:",e)
+        print("BOT ERROR:", e)
 
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Bot is running!"
+    return "BOT RUNNING 🔥"
