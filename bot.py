@@ -46,14 +46,14 @@ def save_json(file, data):
 
 questions = load_json("questions.json", [{"q": "عاصمة مصر؟", "a": "القاهرة"}])
 words = load_json("words.json", ["تفاحة"]) 
+f3alyat_list = load_json("f3alyat.json", ["صور خلفية جوالك"])
 race_data = load_json("race.json", ["سبحان الله"])
 tf_data = load_json("truefalse.json", [{"q": "الشمس تدور حول الأرض", "a": "غلط"}])
 points = load_json("points.json", {})
 admins = load_json("admins.json", [OWNER_ID])
 if OWNER_ID not in admins: admins.append(OWNER_ID)
 
-# ✅ ملف جديد لحفظ إعدادات الجروبات (مين مفعل المنشن ومين لا)
-# الشكل: {"mention_enabled_groups": ["group_id_1", "group_id_2"]}
+# إعدادات الجروبات (لتخزين حالة المنشن لكل جروب)
 group_settings = load_json("settings.json", {"mention_enabled_groups": []})
 
 GAMES_ENABLED = True 
@@ -118,7 +118,7 @@ def handle_message(event):
             else:
                 reply = "❌ انتظر الأدمن."
         
-        # ✅ أوامر التحكم في المنشن (جديد)
+        # ✅ أوامر التحكم في المنشن (للأدمن فقط)
         elif msg == "تفعيل المنشن":
             if user_id in admins:
                 if room_id not in group_settings["mention_enabled_groups"]:
@@ -128,18 +128,19 @@ def handle_message(event):
                 else:
                     reply = "هو مفعل بالفعل! 😉"
             else:
-                reply = "❌ للأدمن فقط."
+                reply = "❌ هذا الأمر للأدمن فقط!"
 
-        elif msg == "تعطيل المنشن":
+        # ✅ أضفت لك كلمة "قفل المنشن" هنا
+        elif msg in ["تعطيل المنشن", "قفل المنشن"]:
             if user_id in admins:
                 if room_id in group_settings["mention_enabled_groups"]:
                     group_settings["mention_enabled_groups"].remove(room_id)
                     save_json("settings.json", group_settings)
-                    reply = "🔕 تم إيقاف التدخل في المنشنات."
+                    reply = "🔕 تم قفل التدخل في المنشنات."
                 else:
-                    reply = "هو معطل بالفعل!"
+                    reply = "هو مقفول بالفعل!"
             else:
-                reply = "❌ للأدمن فقط."
+                reply = "❌ هذا الأمر للأدمن فقط!"
 
         elif msg.startswith("رفع ادمن") and user_id == OWNER_ID:
             for new_admin in mentionees:
@@ -169,33 +170,38 @@ def handle_message(event):
 2️⃣ رتب
 3️⃣ صح غلط
 4️⃣ سباق
+5️⃣ فعالية (جديد ✨)
             
-🔔 للتحكم بالمنشن:
+🔔 للتحكم بالمنشن (للأدمن):
 - تفعيل المنشن
-- تعطيل المنشن
+- قفل المنشن
 
 🏆 للنقاط اكتب: توب"""
 
-        # 🤖 3. (أ) لو نادى البوت (يعمل دائماً)
+        # 🤖 3. الردود والتدخلات
         elif msg in ["بوت", "يا بوت", "bot", "Bot", "البوت"]:
              reply = random.choice(bot_call_replies)
 
-        # 😂 3. (ب) لو منشن شخص تاني (يعمل فقط لو الجروب مفعل)
+        # 🌚 تدخل عشوائي (فقط إذا كان المنشن مفعلاً في هذا الجروب)
         elif mentionees and not msg.startswith(("رفع", "تنزيل")):
-             # الشرط السحري: هل هذا الجروب موجود في قائمة المسموح لهم؟
              if room_id in group_settings["mention_enabled_groups"]:
                  if words:
                      random_word = random.choice(words)
                      reply = f"{random_word} 🌚"
-                 else:
-                     reply = "عينك في عينك كدا؟ 👀"
 
-        # 🎮 4. الألعاب
+        # 🎮 4. الألعاب والفعاليات
         elif GAMES_ENABLED:
             
             if msg in ["سؤال", "رتب", "سباق", "صح غلط"] and room_id in active_games:
                 reply = "⛔ كملوا اللعبة الأولى الأول! أو اكتبوا 'حذف'."
             
+            elif msg == "فعالية":
+                if f3alyat_list:
+                    act = random.choice(f3alyat_list)
+                    reply = f"✨ فعالية:\n\n{act}"
+                else:
+                    reply = "مفيش فعاليات 😅"
+
             elif msg == "سؤال":
                 q = random.choice(questions)
                 active_games[room_id] = {"a": q["a"], "p": 2} 
