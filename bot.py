@@ -1,16 +1,14 @@
 from flask import Flask, request, abort
-import random
-import json
-import os
-import time
+import random, json, os, time
+from deep_translator import GoogleTranslator
 
 from linebot.v3.messaging import (
     MessagingApi, Configuration, ApiClient,
     ReplyMessageRequest, TextMessage
 )
 from linebot.v3.webhook import WebhookHandler
-from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from linebot.v3.exceptions import InvalidSignatureError
 
 app = Flask(__name__)
 
@@ -20,9 +18,9 @@ CHANNEL_SECRET = "7768432715f1e544354aa28f3b68ac0e"
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-# -------------------
-# Storage
-# -------------------
+# ==============================
+# STORAGE
+# ==============================
 
 POINTS_FILE = "points.json"
 
@@ -40,16 +38,28 @@ def add_point(user_id, amount=1):
     points[user_id] = points.get(user_id, 0) + amount
     save_points()
 
-# -------------------
-# Performance Systems
-# -------------------
+# ==============================
+# PERFORMANCE
+# ==============================
 
 user_cache = {}
 last_message = {}
+daily_salary = {}
 
-# -------------------
-# Games Data
-# -------------------
+# ==============================
+# SMART REPLIES
+# ==============================
+
+smart_replies = {
+    "السلام عليكم": "وعليكم السلام 😄🔥",
+    "صباح الخير": "صباح الفل ☀️",
+    "مساء الخير": "مساء العسل 😏",
+    "بحبك": "وانا كمان 😂❤️"
+}
+
+# ==============================
+# GAMES DATA
+# ==============================
 
 number_to_guess = None
 current_answer = None
@@ -62,9 +72,9 @@ questions = [
 
 fast_words = ["كمبيوتر", "موبايل", "بوت", "برمجة"]
 
-# -------------------
-# Webhook
-# -------------------
+# ==============================
+# WEBHOOK
+# ==============================
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -88,7 +98,7 @@ def handle_message(event):
         user_message = event.message.text.strip().lower()
         user_id = event.source.user_id
 
-        # 🚫 Anti Spam
+        # 🚫 Anti-Spam
         now = time.time()
         if user_id in last_message:
             if now - last_message[user_id] < 1:
@@ -101,141 +111,230 @@ def handle_message(event):
             # ⚡ Cached username
             if user_id in user_cache:
                 username = user_cache[user_id]
-
             else:
                 try:
                     if event.source.type == "group":
                         profile = line_bot_api.get_group_member_profile(
-                            event.source.group_id,
-                            user_id
+                            event.source.group_id, user_id
                         )
                     else:
                         profile = line_bot_api.get_profile(user_id)
 
                     username = profile.display_name
                     user_cache[user_id] = username
-
                 except:
                     username = "Player 😄"
 
             reply = None
 
-            # -------------------
+            # ==============================
             # MENU
-            # -------------------
+            # ==============================
 
-            if user_message in ["اوامر", "menu", "help"]:
+            if user_message in ["العاب","menu","help"]:
                 reply = """
-🎮 اوامر البوت 🎮
+🔥 اوامر البوت 🔥
 
-🎯 لعبة رقم
-🧠 سؤال
-⚡ مين الأسرع
-✂️ حجر / ورقة / مقص
-🏆 نقاطي
-🥇 توب
+🎮 العاب:
+لعبة ارقام
+سوال
+مين الاسرع
+حجر / ورقة / مقص
+
+💰 اقتصاد:
+نقاطي
+توب
+راتب
+لف
+سرقة
+
+🧠 أدوات:
+احسب 5+5
+ترجم hello
+
+🗣️ قول كلام
 """
 
-            # -------------------
-            # Guess Number
-            # -------------------
+            # ==============================
+            # SAY
+            # ==============================
+
+            elif user_message.startswith("قول "):
+                text = event.message.text[4:]
+
+                if "@all" in text.lower():
+                    reply = "😈 مش هلعب اللعبة دي"
+                else:
+                    reply = text
+
+            # ==============================
+            # CALCULATOR
+            # ==============================
+
+            elif user_message.startswith("احسب"):
+                try:
+                    equation = event.message.text.replace("احسب","").strip()
+
+                    allowed="0123456789+-*/(). "
+                    if not all(c in allowed for c in equation):
+                        reply="❌ عملية غير مسموحة"
+                    else:
+                        result=eval(equation)
+                        reply=f"🧮 الناتج = {result}"
+
+                except:
+                    reply="اكتب كده:\nاحسب 5+5"
+
+            # ==============================
+            # TRANSLATE
+            # ==============================
+
+            elif user_message.startswith("ترجم"):
+                try:
+                    text=event.message.text.replace("ترجم","").strip()
+                    translated=GoogleTranslator(source='auto', target='ar').translate(text)
+
+                    reply=f"🌍 الترجمة:\n{translated}"
+
+                except:
+                    reply="اكتب:\nترجم hello"
+
+            # ==============================
+            # SMART REPLIES
+            # ==============================
+
+            elif user_message in smart_replies:
+                reply = smart_replies[user_message]
+
+            # ==============================
+            # GUESS NUMBER
+            # ==============================
 
             global number_to_guess
 
-            if user_message == "لعبة رقم":
-                number_to_guess = random.randint(1, 10)
-                reply = "🎯 خمنت رقم من 1 لـ10!"
+            if user_message == "لعبة ارقام":
+                number_to_guess = random.randint(1,10)
+                reply="🎯 خمنت رقم من 1 لـ10"
 
             elif user_message.isdigit() and number_to_guess:
-                if int(user_message) == number_to_guess:
+                if int(user_message)==number_to_guess:
                     add_point(user_id)
-                    reply = f"🔥 مبروك {username} +1 نقطة"
-                    number_to_guess = None
+                    reply=f"🔥 مبروك {username} +1 نقطة"
+                    number_to_guess=None
                 else:
-                    reply = "❌ غلط"
+                    reply="❌ غلط"
 
-            # -------------------
-            # Question
-            # -------------------
+            # ==============================
+            # QUESTION
+            # ==============================
 
             global current_answer
 
-            if user_message == "سؤال":
-                q = random.choice(questions)
-                current_answer = q["a"].lower()
-                reply = q["q"]
+            if user_message=="سوال":
+                q=random.choice(questions)
+                current_answer=q["a"].lower()
+                reply=q["q"]
 
-            elif current_answer and user_message == current_answer:
+            elif current_answer and user_message==current_answer:
                 add_point(user_id)
-                reply = f"🔥 صح يا {username}"
-                current_answer = None
+                reply=f"🔥 صح يا {username}"
+                current_answer=None
 
-            # -------------------
-            # Fast Word
-            # -------------------
+            # ==============================
+            # FAST WORD
+            # ==============================
 
             global current_word
 
-            if user_message == "مين الأسرع":
-                current_word = random.choice(fast_words)
-                scrambled = ''.join(random.sample(current_word, len(current_word)))
-                reply = f"⚡ رتب الكلمة:\n{scrambled}"
+            if user_message=="مين الاسرع":
+                current_word=random.choice(fast_words)
+                scrambled=''.join(random.sample(current_word,len(current_word)))
+                reply=f"⚡ رتب الكلمة:\n{scrambled}"
 
-            elif current_word and user_message == current_word:
+            elif current_word and user_message==current_word:
                 add_point(user_id)
-                reply = f"🚀 {username} كسب!"
-                current_word = None
+                reply=f"🚀 {username} كسب!"
+                current_word=None
 
-            # -------------------
-            # Rock Paper Scissors
-            # -------------------
+            # ==============================
+            # ROCK PAPER SCISSORS
+            # ==============================
 
-            if user_message in ["حجر", "ورقة", "مقص"]:
+            if user_message in ["حجر","ورقة","مقص"]:
+                choices=["حجر","ورقة","مقص"]
+                bot=random.choice(choices)
 
-                choices = ["حجر", "ورقة", "مقص"]
-                bot_choice = random.choice(choices)
-
-                if user_message == bot_choice:
-                    reply = f"🤝 تعادل! اخترت {bot_choice}"
+                if user_message==bot:
+                    reply=f"🤝 تعادل! اخترت {bot}"
 
                 elif (
-                    (user_message == "حجر" and bot_choice == "مقص") or
-                    (user_message == "ورقة" and bot_choice == "حجر") or
-                    (user_message == "مقص" and bot_choice == "ورقة")
+                    (user_message=="حجر" and bot=="مقص") or
+                    (user_message=="ورقة" and bot=="حجر") or
+                    (user_message=="مقص" and bot=="ورقة")
                 ):
                     add_point(user_id)
-                    reply = f"🔥 كسبت! اخترت {bot_choice}"
+                    reply=f"🔥 كسبت! اخترت {bot}"
 
                 else:
-                    reply = f"😈 خسرت! اخترت {bot_choice}"
+                    reply=f"😈 خسرت! اخترت {bot}"
 
-            # -------------------
-            # Points
-            # -------------------
+            # ==============================
+            # ECONOMY
+            # ==============================
 
-            if user_message == "نقاطي":
-                score = points.get(user_id, 0)
-                reply = f"🏆 معاك {score} نقطة"
+            elif user_message=="نقاطي":
+                reply=f"🏆 معاك {points.get(user_id,0)} نقطة"
 
-            if user_message == "توب":
+            elif user_message=="توب":
 
                 if not points:
-                    reply = "لسه محدش لعب 😄"
-
+                    reply="لسه محدش لعب 😄"
                 else:
-                    top = sorted(points.items(), key=lambda x: x[1], reverse=True)[:10]
+                    top=sorted(points.items(),key=lambda x:x[1],reverse=True)[:10]
 
-                    text = "🥇 التوب:\n"
+                    text="🥇 التوب:\n"
+                    for i,(uid,score) in enumerate(top,start=1):
+                        name=user_cache.get(uid,"Player")
+                        text+=f"{i}- {name} ({score})\n"
 
-                    for i, (uid, score) in enumerate(top, start=1):
-                        name = user_cache.get(uid, "Player")
-                        text += f"{i}- {name} ({score})\n"
+                    reply=text
 
-                    reply = text
+            elif user_message=="راتب":
 
-            # -------------------
-            # Safe Reply
-            # -------------------
+                if user_id in daily_salary and now-daily_salary[user_id]<86400:
+                    reply="⏳ تعالا بكرة 😄"
+                else:
+                    salary=random.randint(5,15)
+                    add_point(user_id,salary)
+                    daily_salary[user_id]=now
+                    reply=f"💰 قبضت {salary} نقطة!"
+
+            elif user_message=="لف":
+
+                prizes=[-3,-1,1,2,5,10]
+                prize=random.choice(prizes)
+                add_point(user_id,prize)
+
+                if prize>0:
+                    reply=f"🎰 كسبت {prize} نقاط!"
+                else:
+                    reply=f"💀 خسرت {abs(prize)}"
+
+            elif user_message=="سرقة":
+
+                success=random.choice([True,False])
+
+                if success:
+                    amount=random.randint(1,5)
+                    add_point(user_id,amount)
+                    reply=f"😈 سرقت {amount} نقاط!"
+                else:
+                    add_point(user_id,-2)
+                    reply="🚔 اتمسكت! -2 نقاط"
+
+            # ==============================
+            # SAFE REPLY
+            # ==============================
 
             if reply:
                 try:
@@ -246,10 +345,10 @@ def handle_message(event):
                         )
                     )
                 except Exception as e:
-                    print("Reply Error:", e)
+                    print("Reply Error:",e)
 
     except Exception as e:
-        print("🔥 BOT CRASH:", e)
+        print("🔥 BOT CRASH:",e)
 
 
 @app.route("/", methods=["GET"])
