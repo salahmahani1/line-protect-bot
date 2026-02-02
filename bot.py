@@ -14,13 +14,32 @@ from linebot.v3.exceptions import InvalidSignatureError
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
 
-
 # 🔴 ضع الـ ID الخاص بك هنا
 OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d"
 
 app = Flask(__name__)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
+
+# ================= 🤣 قائمة الردود الساخرة (تعمل دائماً) =================
+funny_replies = [
+    "عايز ايه يا ابني؟ انا مش فاضيلك 😒",
+    "يا ساتر.. كل شوية منشن منشن! 🤯",
+    "المنشن بفلوس على فكرة 💸",
+    "أنا نايم، تعال بكره 😴",
+    "حد يقوله يسكت والنبي 😂",
+    "نعم؟ لبيك شبيك البوت بين ايديك 🧞‍♂️",
+    "مش هرد عليك عشان شكلك مش عاجبني 🌚",
+    "يا ابني ركز في مستقبلك وسيب البوت 📖",
+    "لا إله إلا الله.. عايز ايه؟ 😂",
+    "بحبك بس ما تكررهاش تاني ❤️",
+    "انت بتناديني ليه؟ انا شغال عندك؟ 🤨",
+    "سمعتك من اول مرة والله 👂",
+    "جروب كله رغي مفيش فايدة 🗣️",
+    "طب قول 'يا عم البوت' طيب احترمني! 😎",
+    "فاضي شوية نشرب قهوة في حتة بعيدة؟ ☕",
+    "أيوة أنا البوت.. الامضاء: ذكاء اصطناعي زهقان 🤖"
+]
 
 # ================= إدارة الملفات =================
 def load_json(file, default_data):
@@ -34,7 +53,10 @@ def save_json(file, data):
         json.dump(data, f, ensure_ascii=False)
 
 questions = load_json("questions.json", [{"q": "عاصمة مصر؟", "a": "القاهرة"}])
-words = load_json("words.json", ["تفاحة"])
+
+# ✅ الآن يتم تحميل الكلمات من الملف words.json تلقائياً
+words = load_json("words.json", ["تفاحة", "موز", "برتقال"]) 
+
 race_data = load_json("race.json", ["سبحان الله"])
 tf_data = load_json("truefalse.json", [{"q": "الشمس تدور حول الأرض", "a": "غلط"}])
 points = load_json("points.json", {})
@@ -124,8 +146,8 @@ def handle_message(event):
             else:
                 reply = "مفيش لعبة شغالة أصلاً! 😂"
 
-        # 📋 2. المساعدة والقائمة (متاحة دائماً)
-        elif msg in ["help", "العاب", "قائمة", "menu"]:
+        # 📋 2. القائمة
+        elif msg in ["العاب", "اوامر الالعاب", "help", "menu"]:
             reply = """🎮 قائمة الألعاب:
 1️⃣ سؤال
 2️⃣ رتب
@@ -135,10 +157,13 @@ def handle_message(event):
 🛑 للحذف اكتب: حذف
 🏆 للنقاط اكتب: توب"""
 
-        # 🎮 3. الألعاب
+        # 🤣 3. الردود الساخرة (تعمل دائماً)
+        elif mentionees and not msg.startswith(("رفع", "تنزيل")):
+             reply = random.choice(funny_replies)
+
+        # 🎮 4. الألعاب (تعمل فقط لو مفتوحة)
         elif GAMES_ENABLED:
             
-            # منع التداخل
             if msg in ["سؤال", "رتب", "سباق", "صح غلط"] and room_id in active_games:
                 reply = "⛔ كملوا اللعبة الأولى الأول! أو اكتبوا 'حذف'."
             
@@ -153,7 +178,7 @@ def handle_message(event):
                 reply = f"🤔 صح أم خطأ؟\n{q['q']}"
 
             elif msg == "رتب":
-                w = random.choice(words)
+                w = random.choice(words) # يقرأ من ملف words.json
                 scrambled = "".join(random.sample(w, len(w)))
                 active_games[room_id] = {"a": w, "p": 2}
                 reply = f"✏️ رتب: {scrambled}"
@@ -175,7 +200,6 @@ def handle_message(event):
             elif msg.startswith("قول "):
                 reply = msg.replace("قول ", "")
 
-            # التحقق من الإجابة
             elif room_id in active_games:
                 game = active_games[room_id]
                 if is_correct(msg, game["a"]):
