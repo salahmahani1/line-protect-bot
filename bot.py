@@ -1,7 +1,3 @@
-
-CHANNEL_ACCESS_TOKEN = "4L0G8N8l1VWWYIMyOjeHwUgE33s7PK8Ew8rqrZV+UvfhNktNyEZsOvGWJ/CgHfOjWF6pqE6hKCdT9K0cVDZAr8rACRgMorBes/H5hqoV4oVzTPi4U0n3J+iea8t3/SlbpbL0ydIvyHstckOxy7DROwdB04t89/1O/w1cDnyilFU="
-CHANNEL_SECRET = "7bbf30cb8c46fc2cd23711c9ab8155c7"
-
 from flask import Flask, request, abort
 import random
 
