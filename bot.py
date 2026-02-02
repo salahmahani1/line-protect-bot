@@ -156,7 +156,7 @@ def handle_message(event):
                 reply = text
                 
         # 📜 عرض الأوامر
-        elif user_message in ["اوامر", "help", "menu"]:
+        elif user_message in ["اوامر الالعاب", "help", "menu"]:
             reply = """
 🎮 ════ اوامر العاب البوت ════ 🎮
 
