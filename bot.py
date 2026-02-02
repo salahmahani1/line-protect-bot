@@ -1,6 +1,20 @@
 from flask import Flask, request, abort
 import json, random, time
 
+def expand_words(words, target=500):
+    additions = ["تك","برو","ماكس","بلس","العالمي","ستار","جي","360"]
+
+    final_words = words.copy()
+
+    while len(final_words) < target:
+        word = random.choice(words)
+        new_word = word + random.choice(additions)
+
+        if new_word not in final_words:
+            final_words.append(new_word)
+
+    return final_words
+    
 from linebot.v3.messaging import (
     MessagingApi, Configuration, ApiClient,
     ReplyMessageRequest, TextMessage
@@ -33,7 +47,7 @@ def load_json(file):
         return json.load(f)
 
 questions_data = load_json("questions.json")
-words_data = load_json("words.json")
+words_data = expand_words(load_json("words.json"), 1000)
 race_data = load_json("race.json")
 tf_data = load_json("truefalse.json")
 
