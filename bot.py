@@ -1,5 +1,5 @@
 from flask import Flask, request, abort
-import os, json, random, time, threading
+import os, json, random, time
 
 from linebot.v3.messaging import (
     MessagingApi, Configuration, ApiClient,
@@ -9,18 +9,23 @@ from linebot.v3.webhook import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.exceptions import InvalidSignatureError
 
-app = Flask(__name__)
+# ================== CONFIG ==================
 
-CHANNEL_ACCESS_TOKEN = os.getenv("63T0fX0zrA89Mnwv2V4zhRJq2uvKwU5rUwaQNVAa/DYdqW1bYE3/cNXjM7i4skZSDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3Y96eQqxuceWPUlHWJCw8IdOP0IAWX0FlzD4uDQTL0W7wdB04t89/1O/w1cDnyilFU=")
-CHANNEL_SECRET = os.getenv("b64fb5dc359d81c85cf875c1e617663f")
+CHANNEL_ACCESS_TOKEN = os.getenv("CHANNEL_ACCESS_TOKEN")
+CHANNEL_SECRET = os.getenv("CHANNEL_SECRET")
+
+if not CHANNEL_ACCESS_TOKEN or not CHANNEL_SECRET:
+    raise ValueError("❌ Missing LINE credentials in Environment Variables!")
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-# ================= LOAD DATA =================
+app = Flask(__name__)
+
+# ================== LOAD FILES ==================
 
 def load_json(file):
-    with open(file, "r") as f:
+    with open(file, "r", encoding="utf-8") as f:
         return json.load(f)
 
 questions_data = load_json("questions.json")
@@ -28,8 +33,7 @@ words_data = load_json("words.json")
 race_data = load_json("race.json")
 tf_data = load_json("truefalse.json")
 
-
-# ================= QUEUE SYSTEM =================
+# ================== NO REPEAT SYSTEM ==================
 
 def create_queue(data):
     q = data.copy()
@@ -41,28 +45,20 @@ words_queue = create_queue(words_data)
 race_queue = create_queue(race_data)
 tf_queue = create_queue(tf_data)
 
-# ================= STORAGE =================
+# ================== STORAGE ==================
 
 points = {}
-
-def add_point(user, amount=1):
-    points[user] = points.get(user, 0) + amount
-
-# ================= PERFORMANCE =================
-
 user_cache = {}
 last_message = {}
 
-# ================= GAME STATE =================
+# ================== GAME STATE ==================
 
 current_answer = None
 current_word = None
 race_text = None
 tf_answer = None
-round_active = False
 
-
-# ================= FAST WORD =================
+# ================== HELPERS ==================
 
 def scramble(word):
     mixed = word
@@ -70,46 +66,55 @@ def scramble(word):
         mixed = ''.join(random.sample(word, len(word)))
     return mixed
 
+def anti_spam(user_id):
+    now = time.time()
+    if user_id in last_message:
+        if now - last_message[user_id] < 1:
+            return True
+    last_message[user_id] = now
+    return False
 
-def next_word():
-    global words_queue
-
-    if not words_queue:
-        words_queue = create_queue(words_data)
-
-    return words_queue.pop()
+def add_points(user, amount=2):
+    points[user] = points.get(user, 0) + amount
 
 
-# ================= WEBHOOK =================
+# ================== WEBHOOK ==================
 
 @app.route("/callback", methods=['POST'])
 def callback():
-    signature = request.headers['X-Line-Signature']
+    signature = request.headers.get('X-Line-Signature')
     body = request.get_data(as_text=True)
 
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
+    except Exception as e:
+        print("CRASH:", e)
 
     return 'OK'
 
 
+@app.route("/")
+def home():
+    return "🔥 BOT RUNNING"
+
+
+# ================== MESSAGE ==================
+
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
 
-    global current_answer, current_word, race_text, tf_answer, round_active
+    global current_answer, current_word, race_text, tf_answer
+    global questions_queue, words_queue, race_queue, tf_queue
 
     try:
-        msg = event.message.text.strip().lower()
-        user_id = event.source.user_id
 
-        # 🚫 Anti Spam
-        now = time.time()
-        if user_id in last_message:
-            if now - last_message[user_id] < 1:
-                return
-        last_message[user_id] = now
+        user_id = event.source.user_id
+        msg = event.message.text.strip().lower()
+
+        if anti_spam(user_id):
+            return
 
         with ApiClient(configuration) as api_client:
             api = MessagingApi(api_client)
@@ -121,7 +126,7 @@ def handle_message(event):
 
             # ================= MENU =================
 
-            if msg in ["العاب","menu"]:
+            if msg in ["اوامر", "menu"]:
                 reply = """
 🔥 GAME BOT 🔥
 
@@ -137,8 +142,6 @@ def handle_message(event):
 
             elif msg == "سؤال":
 
-                global questions_queue
-
                 if not questions_queue:
                     questions_queue = create_queue(questions_data)
 
@@ -150,39 +153,33 @@ def handle_message(event):
 
             elif current_answer and current_answer in msg:
 
-                add_point(user_id,2)
+                add_points(user_id)
                 reply = "🔥 إجابة صحيحة!"
 
                 current_answer = None
 
-
-            # ================= FAST GAME =================
+            # ================= FAST WORD =================
 
             elif msg == "مين الأسرع":
 
-                word = next_word()
+                if not words_queue:
+                    words_queue = create_queue(words_data)
+
+                word = words_queue.pop()
                 current_word = word
-                round_active = True
 
-                scrambled = scramble(word)
+                reply = f"⚡ رتب الكلمة:\n🔥 {scramble(word)}"
 
-                reply = f"⚡ رتب الكلمة:\n🔥 {scrambled}"
+            elif current_word and msg == current_word:
 
-            elif round_active and msg == current_word:
-
-                add_point(user_id,2)
-
-                reply = "🚀 أسرع واحد!"
+                add_points(user_id)
+                reply = "🚀 أسرع لاعب!"
 
                 current_word = None
-                round_active = False
-
 
             # ================= RACE =================
 
             elif msg == "سباق":
-
-                global race_queue
 
                 if not race_queue:
                     race_queue = create_queue(race_data)
@@ -193,17 +190,14 @@ def handle_message(event):
 
             elif race_text and msg == race_text:
 
-                add_point(user_id,2)
+                add_points(user_id)
                 reply = "🔥 فاز بالسباق!"
 
                 race_text = None
 
-
-            # ================= TRUE FALSE =================
+            # ================= TRUE/FALSE =================
 
             elif msg == "صح ولا غلط":
-
-                global tf_queue
 
                 if not tf_queue:
                     tf_queue = create_queue(tf_data)
@@ -216,11 +210,10 @@ def handle_message(event):
 
             elif tf_answer and msg == tf_answer:
 
-                add_point(user_id,2)
-                reply = "✔️ صح!"
+                add_points(user_id)
+                reply = "✔️ إجابة صح!"
 
                 tf_answer = None
-
 
             # ================= POINTS =================
 
@@ -229,20 +222,21 @@ def handle_message(event):
 
             elif msg == "توب":
 
-                if points:
+                if not points:
+                    reply = "لسه محدش لعب 😄"
+                else:
                     top = sorted(points.items(),
-                                 key=lambda x:x[1],
+                                 key=lambda x: x[1],
                                  reverse=True)[:10]
 
-                    text="🥇 التوب:\n"
+                    text = "🥇 أقوى اللاعبين:\n"
 
-                    for i,(u,s) in enumerate(top,start=1):
-                        text+=f"{i}- {user_cache.get(u,'Player')} ({s})\n"
+                    for i, (u, s) in enumerate(top, start=1):
+                        text += f"{i}- {user_cache.get(u,'Player')} ({s})\n"
 
-                    reply=text
+                    reply = text
 
-
-            # ================= SAFE REPLY =================
+            # ================= SEND =================
 
             if reply:
                 api.reply_message(
@@ -254,8 +248,3 @@ def handle_message(event):
 
     except Exception as e:
         print("BOT ERROR:", e)
-
-
-@app.route("/", methods=["GET"])
-def home():
-    return "BOT RUNNING 🔥"
