@@ -182,7 +182,7 @@ def handle_message(event):
 
             reply = f"🧠 {q['q']}"
 
-        elif current_answer and current_answer in msg:
+        if current_answer and current_answer in msg:
 
             add_points(user_id, 2)
             reply = "🔥 إجابة صحيحة +2 نقاط"
