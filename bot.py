@@ -1,6 +1,24 @@
 from flask import Flask, request, abort
 import json, random, time
 
+def expand_race(sentences, target=500):
+    extras = [
+        "بسرعة","الان","فورا","بدقة","بدون اخطاء",
+        "مثل المحترفين","قبل الجميع","في ثواني",
+        "بتركيز عالي","كالصاروخ"
+    ]
+
+    final = sentences.copy()
+
+    while len(final) < target:
+        s = random.choice(sentences)
+        new_sentence = s + " " + random.choice(extras)
+
+        if new_sentence not in final:
+            final.append(new_sentence)
+
+    return final_words
+    
 def expand_words(words, target=500):
     additions = ["تك","برو","ماكس","بلس","العالمي","ستار","جي","360"]
 
