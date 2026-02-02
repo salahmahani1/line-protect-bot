@@ -16,7 +16,7 @@ CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
 
 # 🔴🔴 هام جداً: ضع الايدي الخاص بك هنا لتكون المالك الأساسي
 # (لن يستطيع أحد حذفك أو التحكم غيرك في البداية)
-OWNER_ID = "U55fb450e06025fe8a329ed942e65de04" 
+OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d" 
 
 app = Flask(__name__)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
