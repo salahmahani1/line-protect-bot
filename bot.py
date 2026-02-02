@@ -14,15 +14,15 @@ from linebot.v3.exceptions import InvalidSignatureError
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
 
-# 🔴🔴 هام جداً: ضع الايدي الخاص بك هنا لتكون المالك الأساسي
-# (لن يستطيع أحد حذفك أو التحكم غيرك في البداية)
-OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d" 
+
+# 🔴 ضع الـ ID الخاص بك هنا
+OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d"
 
 app = Flask(__name__)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-# ================= إدارة الملفات والبيانات =================
+# ================= إدارة الملفات =================
 def load_json(file, default_data):
     if os.path.exists(file):
         with open(file, "r", encoding="utf-8") as f:
@@ -33,22 +33,18 @@ def save_json(file, data):
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
 
-# تحميل البيانات
 questions = load_json("questions.json", [{"q": "عاصمة مصر؟", "a": "القاهرة"}])
 words = load_json("words.json", ["تفاحة"])
 race_data = load_json("race.json", ["سبحان الله"])
 tf_data = load_json("truefalse.json", [{"q": "الشمس تدور حول الأرض", "a": "غلط"}])
 points = load_json("points.json", {})
-
-# تحميل قائمة الأدمن (تلقائياً يضيف المالك)
 admins = load_json("admins.json", [OWNER_ID])
 if OWNER_ID not in admins: admins.append(OWNER_ID)
 
-# حالة الألعاب (مفتوحة أو مغلقة)
 GAMES_ENABLED = True 
-active_games = {}
+active_games = {} 
 
-# ================= أدوات مساعدة =================
+# ================= دوال مساعدة =================
 def normalize(text):
     text = str(text).lower().strip()
     text = re.sub(r'[أإآ]', 'ا', text)
@@ -83,7 +79,6 @@ def handle_message(event):
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
     
-    # التعامل مع المنشن (لاستخراج الايديهات)
     mentionees = []
     if event.message.mention:
         mentionees = [m.user_id for m in event.message.mention.mentionees]
@@ -92,65 +87,61 @@ def handle_message(event):
         api = MessagingApi(api_client)
         reply = None
 
-        # ---------------------------------------------------------
-        # 👑 1. أوامر التحكم (للأدمن والمالك فقط)
-        # ---------------------------------------------------------
-        
-        # أمر قفل اللعب
+        # 👑 1. التحكم
         if msg == "قفل اللعب" or msg == "قفل":
             if user_id in admins:
                 GAMES_ENABLED = False
-                active_games.pop(room_id, None) # إلغاء اللعبة الحالية
-                reply = "🔒 تم قفل الألعاب! (محدش يقدر يلعب غير بأمر الأدمن)"
+                active_games.pop(room_id, None)
+                reply = "🔒 تم قفل الألعاب!"
             else:
-                reply = "❌ أنت مش أدمن عشان تقفل اللعبة!"
+                reply = "❌ أنت مش أدمن!"
 
-        # أمر فتح اللعب
         elif msg == "فتح اللعب" or msg == "فتح":
             if user_id in admins:
                 GAMES_ENABLED = True
-                reply = "🔓 تم فتح الألعاب للجميع! انطلقوا 🔥"
+                reply = "🔓 تم فتح الألعاب!"
             else:
-                reply = "❌ انتظر الأدمن يفتح اللعب."
+                reply = "❌ انتظر الأدمن."
 
-        # أمر رفع أدمن بالمنشن (للمالك فقط)
         elif msg.startswith("رفع ادمن") and user_id == OWNER_ID:
-            if not mentionees:
-                reply = "⚠️ لازم تعمل منشن للشخص مع الأمر (مثال: رفع ادمن @فلان)"
-            else:
-                count = 0
-                for new_admin in mentionees:
-                    if new_admin not in admins:
-                        admins.append(new_admin)
-                        count += 1
-                save_json("admins.json", admins) # حفظ دائم
-                reply = f"✅ تم ترقية {count} عضو لرتبة أدمن بنجاح!"
+            for new_admin in mentionees:
+                if new_admin not in admins: admins.append(new_admin)
+            save_json("admins.json", admins)
+            reply = "✅ تم الترقية."
 
-        # أمر تنزيل أدمن (حذف صلاحية)
         elif msg.startswith("تنزيل ادمن") and user_id == OWNER_ID:
-            if not mentionees:
-                reply = "⚠️ منشن الشخص عشان تحذفه من الإدارة."
+            for old_admin in mentionees:
+                if old_admin in admins and old_admin != OWNER_ID: admins.remove(old_admin)
+            save_json("admins.json", admins)
+            reply = "🗑️ تم التنزيل."
+            
+        elif msg == "ايدي": reply = user_id
+
+        elif msg == "حذف":
+            if room_id in active_games:
+                del active_games[room_id]
+                reply = "🏳️ تم حذف اللعبة الحالية."
             else:
-                for old_admin in mentionees:
-                    if old_admin in admins and old_admin != OWNER_ID:
-                        admins.remove(old_admin)
-                save_json("admins.json", admins)
-                reply = "🗑️ تم سحب رتبة الأدمن."
+                reply = "مفيش لعبة شغالة أصلاً! 😂"
 
-        # أمر معرفة الايدي (عشان تضيف نفسك أول مرة)
-        elif msg == "ايدي":
-            reply = f"🆔 {user_id}"
+        # 📋 2. المساعدة والقائمة (متاحة دائماً)
+        elif msg in ["help", "العاب", "قائمة", "menu","]:
+            reply = """🎮 قائمة الألعاب:
+1️⃣ سؤال
+2️⃣ رتب
+3️⃣ صح غلط
+4️⃣ سباق
+            
+🛑 للحذف اكتب: حذف
+🏆 للنقاط اكتب: توب"""
 
-        # ---------------------------------------------------------
-        # 🎮 2. الألعاب (تعمل فقط لو GAMES_ENABLED = True)
-        # ---------------------------------------------------------
+        # 🎮 3. الألعاب
         elif GAMES_ENABLED:
             
-            # --- الردود العادية ---
-            if msg.startswith("قول "):
-                reply = msg.replace("قول ", "")
-
-            # --- تشغيل الألعاب ---
+            # منع التداخل
+            if msg in ["سؤال", "رتب", "سباق", "صح غلط"] and room_id in active_games:
+                reply = "⛔ كملوا اللعبة الأولى الأول! أو اكتبوا 'حذف'."
+            
             elif msg == "سؤال":
                 q = random.choice(questions)
                 active_games[room_id] = {"a": q["a"], "p": 2} 
@@ -176,33 +167,26 @@ def handle_message(event):
                 top = sorted(points.items(), key=lambda x: x[1], reverse=True)[:5]
                 txt = "🏆 الأوائل:\n"
                 for i, (u, s) in enumerate(top, 1):
-                    try:
-                        p = api.get_profile(u)
-                        name = p.display_name
-                    except:
-                        name = "لاعب"
+                    try: name = api.get_profile(u).display_name
+                    except: name = "بطل"
                     txt += f"{i}. {name} -> {s}\n"
                 reply = txt
 
-            # --- التحقق من الإجابة ---
+            elif msg.startswith("قول "):
+                reply = msg.replace("قول ", "")
+
+            # التحقق من الإجابة
             elif room_id in active_games:
                 game = active_games[room_id]
                 if is_correct(msg, game["a"]):
                     points[user_id] = points.get(user_id, 0) + game["p"]
                     save_json("points.json", points)
-                    
                     try: name = api.get_profile(user_id).display_name
                     except: name = "بطل"
                     
-                    reply = f"✅ صح يا {name}! (+{game['p']} نقاط)"
+                    reply = f"✅ كفو {name}! (+{game['p']} نقاط)\nيلا افتحوا لعبة جديدة 🔥"
                     del active_games[room_id]
 
-        # ⛔ رسالة لو اللعب مقفول وحد حاول يلعب (اختياري)
-        elif msg in ["سؤال", "رتب", "سباق", "صح غلط"] and not GAMES_ENABLED:
-            # يمكنك تركها فارغة لعدم الرد، أو وضع رد يوضح أن اللعب مغلق
-            reply = "⛔ الألعاب مغلقة حالياً من قبل الأدمن."
-
-        # إرسال الرد
         if reply:
             api.reply_message(
                 ReplyMessageRequest(
