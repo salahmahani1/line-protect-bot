@@ -1,62 +1,24 @@
+
+
 from flask import Flask, request, abort
 import json, random, time
 
-def expand_race(sentences, target=500):
-    extras = [
-        "بسرعة","الان","فورا","بدقة","بدون اخطاء",
-        "مثل المحترفين","قبل الجميع","في ثواني",
-        "بتركيز عالي","كالصاروخ"
-    ]
-
-    final = sentences.copy()
-
-    while len(final) < target:
-        s = random.choice(sentences)
-        new_sentence = s + " " + random.choice(extras)
-
-        if new_sentence not in final:
-            final.append(new_sentence)
-
-    return final
-    
-def expand_words(words, target=500):
-    additions = ["تك","برو","ماكس","بلس","العالمي","ستار","جي","360"]
-
-    final_words = words.copy()
-
-    while len(final_words) < target:
-        word = random.choice(words)
-        new_word = word + random.choice(additions)
-
-        if new_word not in final_words:
-            final_words.append(new_word)
-
-    return final_words
-    
 from linebot.v3.messaging import (
     MessagingApi, Configuration, ApiClient,
     ReplyMessageRequest, TextMessage
 )
-
 from linebot.v3.webhook import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.exceptions import InvalidSignatureError
 
+app = Flask(__name__)
 
-# =====================================
-# 🔴 حط التوكن هنا فقط
-# =====================================
-
+# 🔥 حط التوكن هنا
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
 
-# =====================================
-
-app = Flask(__name__)
-
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
-
 
 # ================= LOAD FILES =================
 
@@ -65,13 +27,9 @@ def load_json(file):
         return json.load(f)
 
 questions_data = load_json("questions.json")
-words_data = expand_words(load_json("words.json"), 1000)
-race_data = expand_race(load_json("race.json"), 800)
+words_data = load_json("words.json")
+race_data = load_json("race.json")
 tf_data = load_json("truefalse.json")
-
-
-# ================= QUEUE SYSTEM =================
-# يمنع التكرار
 
 def create_queue(data):
     q = data.copy()
@@ -83,7 +41,6 @@ words_queue = create_queue(words_data)
 race_queue = create_queue(race_data)
 tf_queue = create_queue(tf_data)
 
-
 # ================= STORAGE =================
 
 points = {}
@@ -91,11 +48,24 @@ last_message = {}
 
 current_answer = None
 current_word = None
-race_text = None
+current_race = None
 tf_answer = None
 
-
 # ================= HELPERS =================
+
+def normalize(text):
+    return text.replace(" ", "").lower()
+
+def anti_spam(user_id):
+    now = time.time()
+    if user_id in last_message:
+        if now - last_message[user_id] < 1:
+            return True
+    last_message[user_id] = now
+    return False
+
+def add_points(user, amount=1):
+    points[user] = points.get(user, 0) + amount
 
 def scramble(word):
     mixed = word
@@ -103,27 +73,10 @@ def scramble(word):
         mixed = ''.join(random.sample(word, len(word)))
     return mixed
 
-
-def anti_spam(user_id):
-    now = time.time()
-
-    if user_id in last_message:
-        if now - last_message[user_id] < 1:
-            return True
-
-    last_message[user_id] = now
-    return False
-
-
-def add_points(user, amount=1):
-    points[user] = points.get(user, 0) + amount
-
-
 # ================= WEBHOOK =================
 
 @app.route("/callback", methods=['POST'])
 def callback():
-
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
 
@@ -134,13 +87,12 @@ def callback():
 
     return 'OK'
 
-
 # ================= BOT =================
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
 
-    global current_answer, current_word, race_text, tf_answer
+    global current_answer, current_word, current_race, tf_answer
     global questions_queue, words_queue, race_queue, tf_queue
 
     user_id = event.source.user_id
@@ -156,122 +108,94 @@ def handle_message(event):
 
         # ================= MENU =================
 
-        if msg in ["العاب","menu","help"]:
+        if msg in ["العاب", "menu", "help"]:
             reply = """
-🔥 GAME BOT 🔥
+🔥 الألعاب المتاحة:
 
-🧠 سؤال
-⚡ مين الأسرع
-🏁 سباق
-✔️ صح ولا غلط
-🏆 نقاطي
-🥇 توب
+🧠 سوال → سؤال وجواب  
+⚡ مين الاسرع → اكتب الجملة بسرعة  
+🔤 رتب → رتب الكلمة  
+✅ صح غلط → صح ولا غلط  
+🏆 توب → أقوى اللاعبين  
 
-اكتب اسم اللعبة بس 😄
+اكتب اسم اللعبة بس 😈
 """
 
         # ================= QUESTIONS =================
 
-        elif msg == "سؤال":
-
+        elif msg == "سوال":
             if not questions_queue:
                 questions_queue = create_queue(questions_data)
 
             q = questions_queue.pop()
-            current_answer = q["a"].lower()
+            current_answer = normalize(q["a"])
 
             reply = f"🧠 {q['q']}"
 
-        if current_answer and current_answer in msg:
-
+        elif current_answer and normalize(msg) == current_answer:
             add_points(user_id, 2)
-            reply = "🔥 إجابة صحيحة +2 نقاط"
-
+            reply = "🔥 إجابة صحيحة +2 نقاط!"
             current_answer = None
 
+        # ================= TRUE FALSE =================
 
-        # ================= FAST WORD =================
-
-        elif msg == "مين الأسرع":
-
-            if not words_queue:
-                words_queue = create_queue(words_data)
-
-            word = words_queue.pop()
-            current_word = word
-
-            reply = f"⚡ رتب الكلمة:\n🔥 {scramble(word)}"
-
-        elif current_word and msg == current_word:
-
-            add_points(user_id, 2)
-            reply = "🚀 أسرع لاعب +2 نقاط"
-
-            current_word = None
-
-
-        # ================= RACE =================
-
-        elif msg == "سباق":
-
-            if not race_queue:
-                race_queue = create_queue(race_data)
-
-            race_text = race_queue.pop().lower()
-
-            reply = f"🏁 اكتب بسرعة:\n{race_text}"
-
-        elif race_text and msg == race_text:
-
-            add_points(user_id, 2)
-            reply = "🔥 فاز بالسباق +2 نقاط"
-
-            race_text = None
-
-
-        # ================= TRUE / FALSE =================
-
-        elif msg == "صح ولا غلط":
-
+        elif msg in ["صح غلط", "صح ولا غلط"]:
             if not tf_queue:
                 tf_queue = create_queue(tf_data)
 
             q = tf_queue.pop()
-            tf_answer = q["a"].lower()
+            tf_answer = normalize(q["a"])
 
-            reply = f"🧠 {q['q']}"
+            reply = f"✅ صح أم غلط:\n{q['q']}"
 
-        elif tf_answer and msg == tf_answer:
-
-            add_points(user_id, 2)
-            reply = "✔️ إجابة صح +2 نقاط"
-
+        elif tf_answer and normalize(msg) == tf_answer:
+            add_points(user_id, 1)
+            reply = "👏 صح +1 نقطة!"
             tf_answer = None
 
+        # ================= SCRAMBLE =================
 
-        # ================= POINTS =================
+        elif msg == "رتب":
+            if not words_queue:
+                words_queue = create_queue(words_data)
 
-        elif msg == "نقاطي":
-            reply = f"🏆 معاك {points.get(user_id,0)} نقطة"
+            word = words_queue.pop()
+            current_word = normalize(word)
 
+            reply = f"🔤 رتب الكلمة:\n{scramble(word)}"
+
+        elif current_word and normalize(msg) == current_word:
+            add_points(user_id, 2)
+            reply = "🔥 برافو رتبتها صح +2 نقاط!"
+            current_word = None
+
+        # ================= RACE =================
+
+        elif msg == "مين الاسرع":
+            if not race_queue:
+                race_queue = create_queue(race_data)
+
+            current_race = race_queue.pop()
+            reply = f"⚡ اكتب بسرعة:\n{current_race}"
+
+        elif current_race and normalize(msg) == normalize(current_race):
+            add_points(user_id, 3)
+            reply = "🚀 انت الأسرع! +3 نقاط"
+            current_race = None
+
+        # ================= TOP =================
 
         elif msg == "توب":
-
             if not points:
                 reply = "لسه محدش لعب 😄"
             else:
+                top = sorted(points.items(), key=lambda x: x[1], reverse=True)[:10]
 
-                top = sorted(points.items(),
-                             key=lambda x: x[1],
-                             reverse=True)[:10]
-
-                text = "🥇 أقوى اللاعبين:\n"
-
-                for i,(u,s) in enumerate(top, start=1):
-                    text += f"{i}- لاعب ({s})\n"
+                text = "🏆 أقوى اللاعبين:\n\n"
+                for i,(u,s) in enumerate(top,1):
+                    text += f"{i}- لاعب ({s}) نقطة\n"
 
                 reply = text
-
 
         # ================= SEND =================
 
@@ -283,11 +207,12 @@ def handle_message(event):
                 )
             )
 
+# ================= SERVER =================
 
 @app.route("/", methods=["GET"])
 def home():
     return "BOT IS RUNNING 🔥"
-    
+
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 5000))
