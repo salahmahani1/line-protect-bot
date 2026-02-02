@@ -11,8 +11,8 @@ from linebot.v3.exceptions import InvalidSignatureError
 
 app = Flask(__name__)
 
-CHANNEL_ACCESS_TOKEN = os.getenv(""QPrjs2oE0WkxeQqXZKUy8eDjfK4kY2iD3bg3iDaE09doEdXp9+C1203rzMyz+UWHDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3Z+GfADLEe2xv89bBYFqRg6ritVwXIPLFQBnWrM/7ITMAdB04t89/1O/w1cDnyilFU=")
-CHANNEL_SECRET = os.getenv("7768432715f1e544354aa28f3b68ac0e")
+CHANNEL_ACCESS_TOKEN = os.getenv("63T0fX0zrA89Mnwv2V4zhRJq2uvKwU5rUwaQNVAa/DYdqW1bYE3/cNXjM7i4skZSDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3Y96eQqxuceWPUlHWJCw8IdOP0IAWX0FlzD4uDQTL0W7wdB04t89/1O/w1cDnyilFU=")
+CHANNEL_SECRET = os.getenv("b64fb5dc359d81c85cf875c1e617663f")
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
