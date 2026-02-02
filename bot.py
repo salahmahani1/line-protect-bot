@@ -66,7 +66,7 @@ def load_json(file):
 
 questions_data = load_json("questions.json")
 words_data = expand_words(load_json("words.json"), 1000)
-race_data = load_json("race.json")
+race_data = expand_race(load_json("race.json"), 800)
 tf_data = load_json("truefalse.json")
 
 
