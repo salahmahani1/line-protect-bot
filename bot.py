@@ -156,7 +156,7 @@ def handle_message(event):
 
         # ================= MENU =================
 
-        if msg in ["اوامر","menu","help"]:
+        if msg in ["العاب","menu","help"]:
             reply = """
 🔥 GAME BOT 🔥
 
