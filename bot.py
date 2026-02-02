@@ -17,7 +17,7 @@ def expand_race(sentences, target=500):
         if new_sentence not in final:
             final.append(new_sentence)
 
-    return final_words
+    return final
     
 def expand_words(words, target=500):
     additions = ["تك","برو","ماكس","بلس","العالمي","ستار","جي","360"]
