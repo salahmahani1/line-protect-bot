@@ -64,20 +64,15 @@ points = load_json("points.json", {})
 economy = load_json("economy.json", {})
 marriages = load_json("marriages.json", {})
 custom_replies = load_json("custom_replies.json", {})
-mentions_data = load_json("mentions.json", {
-    "on_mention": [],
-    "on_return": []
-})
 settings = load_json("settings.json", {"games_locked": []})
 
-admins = list(set(load_json("admins.json", []) + OWNERS))
+admins = list(set(load_json("admins.json", []) + [OWNER_ID]))
 save_json("admins.json", admins)
 
 
 # ================== RUNTIME ==================
 
 active_games = {}
-pending_mentions = {}
 cooldowns = defaultdict(float)
 spam_guard = defaultdict(int)
 
@@ -165,7 +160,6 @@ def callback():
 def handle_message(event):
 
     msg = event.message.text.strip()
-    mention = event.message.mention
     user_id = event.source.user_id
     room_id = getattr(event.source, "group_id", user_id)
 
@@ -198,6 +192,7 @@ def handle_message(event):
 🏆 تفاصيل البطولة
 💰 راتب
 📊 توب
+🆔 ايدي
 """
 
         elif match(msg, "تفاصيل الالعاب"):
@@ -207,59 +202,18 @@ def handle_message(event):
             reply = TOURNAMENT_INFO
 
 
-# ================= ADMIN =================
+        # ================== ADMIN ==================
 
-if user_id in admins:
+        elif user_id in admins:
 
-    if match(msg, ["رفع ادمن","اضافة ادمن"]):
-
-        if event.message.mention:
-
-            target = event.message.mention.mentionees[0].user_id
-
-            if target not in admins:
-                admins.append(target)
-                save_json("admins.json", admins)
-
-                reply = "✅ تم رفعه أدمن"
-
-    elif match(msg, ["تنزيل ادمن","حذف ادمن"]):
-
-        if event.message.mention:
-
-            target = event.message.mention.mentionees[0].user_id
-
-            if target in admins:
-                admins.remove(target)
-                save_json("admins.json", admins)
-
-                reply = "🗑️ تم تنزيله من الادمن"
-
-elif match(msg, ["الادمن","الاداريين"]):
-
-    text = "👮 قائمة الأدمن:\n"
-
-    for ad in admins:
-        try:
-            n = api.get_profile(ad).display_name
-        except:
-            n = "Admin"
-
-        if ad in OWNERS:
-            text += f"👑 {n}\n"
-        else:
-            text += f"🔹 {n}\n"
-
-    reply = text
-
-    if match(msg, ["فتح الالعاب","تشغيل الالعاب"]):
+            if match(msg, ["فتح الالعاب","تشغيل الالعاب"]):
                 if room_id in settings["games_locked"]:
                     settings["games_locked"].remove(room_id)
                     save_json("settings.json", settings)
 
                 reply = "✅ تم فتح الألعاب"
 
-           elif match(msg, ["قفل الالعاب","ايقاف الالعاب"]):
+            elif match(msg, ["قفل الالعاب","ايقاف الالعاب"]):
                 settings["games_locked"].append(room_id)
                 save_json("settings.json", settings)
 
@@ -267,7 +221,7 @@ elif match(msg, ["الادمن","الاداريين"]):
 
 
             # 🔥 فتح تسجيل البطولة
-           elif match(msg, "فتح تسجيل البطولة"):
+            elif match(msg, "فتح تسجيل البطولة"):
 
                 tournament["open"] = True
                 tournament["players"] = []
@@ -275,7 +229,7 @@ elif match(msg, ["الادمن","الاداريين"]):
                 reply = "🔥 تم فتح التسجيل! اكتب (تسجيل بطولة)"
 
 
-          elif match(msg, "ابدأ البطولة"):
+            elif match(msg, "ابدأ البطولة"):
 
                 if len(tournament["players"]) < 2:
                     reply = "❌ لاعبين غير كافيين"
@@ -348,17 +302,6 @@ elif match(msg, ["الادمن","الاداريين"]):
         elif match(msg, ["ايدي","id"]):
             reply = user_id
 
-
-        # ================== SEND ==================
-
-        if reply:
-            api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply)]
-                )
-            )
-# ================== SEND ==================
         # ================== TOURNAMENT FIGHTS ==================
 
         if tournament["active"] and tournament["match"]:
@@ -409,41 +352,6 @@ elif match(msg, ["الادمن","الاداريين"]):
                         reply = f"✅ نقطة لـ {name} ({tournament['scores'][user_id]}/3)"
 
 
-
-        # ================== SMART MENTION ==================
-
-        if mention and mention.mentionees:
-
-            for m in mention.mentionees:
-
-                if m.user_id != user_id:
-
-                    pending_mentions[m.user_id] = True
-
-                    try:
-                        target_name = api.get_profile(m.user_id).display_name
-                    except:
-                        target_name = "الشخص"
-
-                    if mentions_data["on_mention"]:
-                        msg_text = random.choice(mentions_data["on_mention"])
-                        reply = f"{target_name} 👀 {msg_text}"
-
-
-
-        # 🔥 رجوع المتخفي
-        if user_id in pending_mentions:
-
-            del pending_mentions[user_id]
-
-            try:
-                name_back = api.get_profile(user_id).display_name
-            except:
-                name_back = "المتخفي"
-
-            if mentions_data["on_return"]:
-                msg_text = random.choice(mentions_data["on_return"])
-                reply = f"{name_back} 😈 {msg_text}"
 
         # ================== GAME ENGINE ==================
 
@@ -544,8 +452,8 @@ elif match(msg, ["الادمن","الاداريين"]):
 
         elif normalize(msg) in custom_replies:
             reply = custom_replies[normalize(msg)]
-            
-                # ================== SEND ==================
+
+        # ================== SEND ==================
 
         if reply:
             api.reply_message(
@@ -554,8 +462,5 @@ elif match(msg, ["الادمن","الاداريين"]):
                     messages=[TextMessage(text=reply)]
                 )
             )
-
-
 if __name__ == "__main__":
-
     app.run(host="0.0.0.0", port=5000)
