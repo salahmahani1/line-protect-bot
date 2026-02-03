@@ -198,7 +198,6 @@ def handle_message(event):
 🏆 تفاصيل البطولة
 💰 راتب
 📊 توب
-🆔 ايدي
 """
 
         elif match(msg, "تفاصيل الالعاب"):
@@ -253,7 +252,7 @@ elif match(msg, ["الادمن","الاداريين"]):
 
     reply = text
 
-            if match(msg, ["فتح الالعاب","تشغيل الالعاب"]):
+    if match(msg, ["فتح الالعاب","تشغيل الالعاب"]):
                 if room_id in settings["games_locked"]:
                     settings["games_locked"].remove(room_id)
                     save_json("settings.json", settings)
