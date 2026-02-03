@@ -208,35 +208,33 @@ def handle_message(event):
             reply = TOURNAMENT_INFO
 
 
-        # ================== ADMIN ==================
+# ================= ADMIN =================
 
-        elif user_id in admins:
-            
-            elif match(msg, ["رفع ادمن","اضافة ادمن"]):
+if user_id in admins:
 
-    if event.message.mention:
+    if match(msg, ["رفع ادمن","اضافة ادمن"]):
 
-        target = event.message.mention.mentionees[0].user_id
+        if event.message.mention:
 
-        if target not in admins:
-            admins.append(target)
-            save_json("admins.json", admins)
+            target = event.message.mention.mentionees[0].user_id
 
-            reply = "✅ تم رفعه أدمن!"
+            if target not in admins:
+                admins.append(target)
+                save_json("admins.json", admins)
 
-elif match(msg, ["تنزيل ادمن","حذف ادمن"]):
+                reply = "✅ تم رفعه أدمن"
 
-    if event.message.mention:
+    elif match(msg, ["تنزيل ادمن","حذف ادمن"]):
 
-        target = event.message.mention.mentionees[0].user_id
+        if event.message.mention:
 
-        if target not in OWNERS:
+            target = event.message.mention.mentionees[0].user_id
 
             if target in admins:
                 admins.remove(target)
                 save_json("admins.json", admins)
 
-                reply = "🗑️ تم تنزيله من الأدمن."
+                reply = "🗑️ تم تنزيله من الادمن"
 
 elif match(msg, ["الادمن","الاداريين"]):
 
