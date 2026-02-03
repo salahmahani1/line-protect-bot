@@ -1,13 +1,3 @@
-
-# ================= إعدادات البوت =================
-CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
-CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
-
-OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d"
-
-    app.run(host="0.0.0.0", port=5000)
-
-
 from flask import Flask, request, abort
 import json, random, os, re, time
 from difflib import SequenceMatcher
