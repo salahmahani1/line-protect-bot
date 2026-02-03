@@ -35,7 +35,7 @@ def save_json(file, data):
             json.dump(data, f, ensure_ascii=False)
     except: pass
 
-# تحميل كافة البيانات
+# تحميل كل "دماغ" البوت (الملفات)
 questions = load_json("questions.json", [])
 words = load_json("words.json", [])
 race_data = load_json("race.json", [])
@@ -50,19 +50,19 @@ marriages = load_json("marriages.json", {})
 economy = load_json("economy.json", {})
 group_settings = load_json("settings.json", {"mention_enabled_groups": []})
 
-# متغيرات النظام
+# متغيرات التشغيل
 GAMES_ENABLED = True 
 active_games = {} 
 learning_mode = {} 
 pending_mentions = {}
 
-# 🔥 نظام البطولة
+# نظام البطولة
 tournament = {
     "state": "IDLE", "players": [], "names": {}, 
     "bracket": [], "winners": [], "current_match": None, "round_num": 1
 }
 
-# ================= دوال مساعدة =================
+# ================= دوال الذكاء =================
 def normalize(text):
     text = str(text).lower().strip()
     text = re.sub(r'[أإآ]', 'ا', text)
@@ -90,9 +90,21 @@ def is_correct_answer(user_ans, correct_ans):
     c = normalize(correct_ans)
     return u == c or SequenceMatcher(None, u, c).ratio() > 0.75
 
+def play_rps(user_choice):
+    choices = ["حجر", "ورقة", "مقص"]
+    bot_choice = random.choice(choices)
+    emojis = {"حجر": "🪨", "ورقة": "📄", "مقص": "✂️"}
+    uc = normalize(user_choice)
+    user_clean = "حجر" if "حجر" in uc else "ورقة" if "ورق" in uc else "مقص" if "مقص" in uc else None
+    if not user_clean: return None, None
+    if user_clean == bot_choice: return f"أنت: {emojis[user_clean]}\nأنا: {emojis[bot_choice]}\n\nتعادل! 🤝", False
+    if (user_clean == "حجر" and bot_choice == "مقص") or (user_clean == "ورقة" and bot_choice == "حجر") or (user_clean == "مقص" and bot_choice == "ورقة"):
+        return f"أنت: {emojis[user_clean]}\nأنا: {emojis[bot_choice]}\n\nأنت فزت! 🎉", True
+    return f"أنت: {emojis[user_clean]}\nأنا: {emojis[bot_choice]}\n\nأنا فزت! 😜", False
+
 # ================= السيرفر =================
 @app.route("/", methods=['GET'])
-def home(): return "BOT READY (TOURNAMENT INCLUDED) 🏆🚀"
+def home(): return "BOT READY (NO LEAVE COMMAND) 🛡️"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -104,7 +116,7 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    global points, marriages, economy, active_games, admins, custom_replies, tournament, pending_mentions, group_settings
+    global points, marriages, economy, active_games, admins, custom_replies, tournament, pending_mentions, group_settings, GAMES_ENABLED
     
     msg = event.message.text.strip()
     user_id = event.source.user_id
@@ -118,14 +130,14 @@ def handle_message(event):
 
         reply = None
 
-        # 🕵️‍♂️ المصيدة
+        # 🕵️‍♂️ 1. المصيدة (أولوية قصوى)
         if room_id in pending_mentions and user_id in pending_mentions[room_id]:
             pending_mentions[room_id].remove(user_id)
-            reply = random.choice(mention_jokes.get("on_return", ["أهو جه أهو!"]))
+            reply = random.choice(mention_jokes.get("on_return", ["وصل!"]))
             api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
             return
 
-        # 🛑 وضع التعليم
+        # 🛑 2. وضع التعليم (للأدمن)
         if user_id in learning_mode:
             kw = learning_mode[user_id]
             custom_replies[kw] = msg
@@ -134,7 +146,9 @@ def handle_message(event):
             reply = f"✅ تم حفظ الرد لـ: {kw}"; api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
             return
 
-        # 👑 1. الإدارة
+        # ==========================================
+        # 👑 أوامر التحكم (بدون مغادرة)
+        # ==========================================
         if normalize(msg) == ".a":
             txt = f"👑 المالك والمشرفين:\n⭐ المالك: Not Play\n──────────────\n"
             for admin_id in admins:
@@ -152,26 +166,78 @@ def handle_message(event):
                     else: admins.append(m_id); res.append("تم الترقية! 👮‍♂️")
                 save_json("admins.json", admins); reply = "\n".join(res)
 
-        # 🏆 2. نظام البطولة (المطلوب)
-        elif is_match(msg, ["بطولة", "بطوله"]) and user_id in admins:
+        elif is_match(msg, ["تنزيل ادمن"]) and user_id == OWNER_ID:
+            if mentionees:
+                res = []
+                for m_id in mentionees:
+                    if m_id in admins and m_id != OWNER_ID: admins.remove(m_id); res.append("تم التنزيل. 🗑️")
+                    else: res.append("ليس أدمن!")
+                save_json("admins.json", admins); reply = "\n".join(res)
+
+        elif is_match(msg, ["الادمن", "لوحة"]):
+            if user_id in admins: 
+                reply = """👮‍♂️ **لوحة التحكم:**
+• سجل (كلمة) / حذف (كلمة)
+• رفع ادمن @ / تنزيل ادمن @
+• قفل اللعب / فتح اللعب
+• تفعيل المنشن / قفل المنشن
+• بطولة / ابدأ البطولة / كنسل
+(تم إلغاء أمر المغادرة لضمان البقاء)"""
+
+        # 📢 أمر "قول" (أبقينها لك)
+        elif msg.startswith("قول "):
+            txt = msg.replace("قول ", "", 1).strip()
+            if txt: reply = txt
+
+        elif is_match(msg, ["قفل اللعب"]) and user_id in admins:
+            GAMES_ENABLED = False; active_games.pop(room_id, None); reply = "🔒 تم قفل جميع الألعاب."
+        
+        elif is_match(msg, ["فتح اللعب"]) and user_id in admins:
+            GAMES_ENABLED = True; reply = "🔓 تم فتح الألعاب."
+
+        elif is_match(msg, ["تفعيل المنشن"]) and user_id in admins:
+            if room_id not in group_settings["mention_enabled_groups"]:
+                group_settings["mention_enabled_groups"].append(room_id); save_json("settings.json", group_settings)
+                reply = "🔔 تم تفعيل المصيدة!"
+
+        elif is_match(msg, ["قفل المنشن"]) and user_id in admins:
+            if room_id in group_settings["mention_enabled_groups"]:
+                group_settings["mention_enabled_groups"].remove(room_id); save_json("settings.json", group_settings)
+                reply = "🔕 تم إيقاف المصيدة."
+
+        elif msg.startswith("سجل ") and user_id in admins:
+            kw = normalize(msg.replace("سجل ", "", 1).strip())
+            if kw: learning_mode[user_id] = kw; reply = "✏️ أرسل الرد الآن..."
+            
+        elif msg.startswith("حذف ") and user_id in admins:
+            kw = normalize(msg.replace("حذف ", "", 1).strip())
+            if kw in custom_replies: del custom_replies[kw]; save_json("custom_replies.json", custom_replies); reply = "🗑️ تم الحذف."
+
+        # ==========================================
+        # 🏆 البطولات
+        # ==========================================
+        elif is_match(msg, ["بطولة"]) and user_id in admins:
             tournament = {"state": "REGISTER", "players": [], "names": {}, "bracket": [], "winners": [], "current_match": None, "round_num": 1}
-            reply = "🏆 تم فتح التسجيل! اكتب ( سجلني ) للانضمام."
+            reply = "🏆 فتح التسجيل! اكتب ( سجلني )"
 
         elif is_match(msg, ["سجلني"]) and tournament["state"] == "REGISTER":
             if user_id not in tournament["players"]:
                 tournament["players"].append(user_id); tournament["names"][user_id] = user_name
-                reply = "✅ تم تسجيلك في البطولة."
-            else: reply = "أنت مسجل بالفعل."
+                reply = "✅ تم تسجيلك."
+            else: reply = "أنت مسجل."
+        
+        elif is_match(msg, ["كنسل"]) and user_id in admins:
+            tournament["state"] = "IDLE"; reply = "⛔ تم إلغاء البطولة."
 
-        elif is_match(msg, ["ابدأ البطولة", "ابدا"]) and user_id in admins:
-            if len(tournament["players"]) < 2: reply = "❌ العدد غير كافٍ للبدء."
+        elif is_match(msg, ["ابدأ البطولة"]) and user_id in admins:
+            if len(tournament["players"]) < 2: reply = "❌ العدد غير كافٍ."
             else:
                 pool = tournament["players"][:]; random.shuffle(pool); bracket = []
                 while len(pool) >= 2: bracket.append([pool.pop(), pool.pop()])
                 if pool: tournament["winners"].append(pool[0])
                 tournament["bracket"] = bracket; tournament["state"] = "MATCH_WAITING"
                 p1, p2 = bracket[0]
-                reply = f"📣 المواجهة الأولى:\n{tournament['names'][p1]} 🆚 {tournament['names'][p2]}\nاكتبوا ( جاهز ) للبدء."
+                reply = f"📣 المواجهة: {tournament['names'][p1]} 🆚 {tournament['names'][p2]}\n( جاهز ) للبدء."
 
         elif is_match(msg, ["جاهز"]) and tournament["state"] == "MATCH_WAITING":
             if tournament["bracket"]:
@@ -187,33 +253,35 @@ def handle_message(event):
             if user_id in [match["p1"], match["p2"]] and is_correct_answer(msg, match["q_data"]["a"]):
                 if user_id == match["p1"]: match["s1"] += 1
                 else: match["s2"] += 1
-                if match["q_count"] >= 5: # 5 جولات للمباراة
+                if match["q_count"] >= 5:
                     win_id = match["p1"] if match["s1"] >= match["s2"] else match["p2"]
                     tournament["winners"].append(win_id); tournament["bracket"].pop(0)
                     tournament["state"] = "MATCH_WAITING"
                     reply = f"🏁 الفائز: {tournament['names'][win_id]}! 🎉"
                     if not tournament["bracket"]:
                         if len(tournament["winners"]) == 1:
-                            reply += f"\n🏆 البطل النهائي: {tournament['names'][tournament['winners'][0]]}"; tournament["state"] = "IDLE"
+                            reply += f"\n🏆 البطل: {tournament['names'][tournament['winners'][0]]}"; tournament["state"] = "IDLE"
                         else:
                             tournament["players"] = tournament["winners"]; tournament["winners"] = []; tournament["round_num"] += 1
                             pool = tournament["players"][:]; random.shuffle(pool); bracket = []
                             while len(pool) >= 2: bracket.append([pool.pop(), pool.pop()])
                             if pool: tournament["winners"].append(pool[0])
                             tournament["bracket"] = bracket
-                            reply += "\nانتهى الدور! اكتبوا ( جاهز ) للدور التالي."
+                            reply += "\nالدور التالي! ( جاهز )"
                 else:
                     match["q_count"] += 1; match["q_data"] = random.choice(questions)
                     reply = f"✅ صح!\nس{match['q_count']}: {match['q_data']['q']}"
 
-        # 💰 3. الاقتصاد والاجتماع
+        # ==========================================
+        # 💰 اقتصاد + زواج
+        # ==========================================
         elif is_match(msg, ["راتب"]):
             now = time.time()
             if now - economy.get(user_id, 0) > 86400:
                 points[user_id] = points.get(user_id, 0) + 500; economy[user_id] = now
                 save_json("points.json", points); save_json("economy.json", economy)
-                reply = f"💰 استلمت راتبك! رصيدك: {points[user_id]}"
-            else: reply = "⏳ ارجع لاحقاً."
+                reply = f"💰 استلمت 500 نقطة! رصيدك: {points[user_id]}"
+            else: reply = "⏳ الراتب كل 24 ساعة."
 
         elif is_match(msg, ["تزوج"]) and mentionees:
             p_id = mentionees[0]
@@ -221,19 +289,57 @@ def handle_message(event):
                 marriages[user_id] = p_id; marriages[p_id] = user_id
                 save_json("marriages.json", marriages); reply = "💍 مبروك الزواج!"
 
-        # 🎮 4. الألعاب العامة
+        elif is_match(msg, ["طلاق"]):
+             if user_id in marriages:
+                p = marriages[user_id]; del marriages[user_id]; 
+                if p in marriages: del marriages[p]
+                save_json("marriages.json", marriages); reply = "💔 تم الطلاق."
+
+        elif is_match(msg, ["ملفي", "بروفايلي"]):
+            p = points.get(user_id, 0)
+            status = "متزوج 💍" if user_id in marriages else "عازب 🦦"
+            reply = f"🪪 {user_name}\n💰 {p} | 🏆 {get_rank(p)}\n❤️ {status}"
+
+        # ==========================================
+        # 🎮 الألعاب (الذكاء الموزع على الملفات)
+        # ==========================================
         elif GAMES_ENABLED and tournament["state"] == "IDLE":
-            if is_match(msg, ["الاوامر"]): reply = "🎮 الألعاب: سؤال، رتب، صح غلط، سباق، فعالية، حجر، توب"
+            if is_match(msg, ["الاوامر", "help"]): 
+                reply = """🎮 الألعاب:
+• سؤال / رتب / صح غلط / سباق / فعالية
+• حجر / ورقة / مقص
+• توب / راتب / ملفي / تزوج
+• .a (للمشرفين)"""
+            # 👇 هنا البوت بيستخدم كل الملفات
             elif is_match(msg, ["سؤال"]):
                 q = random.choice(questions); active_games[room_id] = {"a": q["a"], "p": 2}; reply = f"🧠 سؤال: {q['q']}"
+            elif is_match(msg, ["رتب"]):
+                w = random.choice(words); s = "".join(random.sample(w, len(w))); active_games[room_id] = {"a": w, "p": 2}; reply = f"✏️ رتب: {s}"
+            elif is_match(msg, ["صح غلط"]):
+                q = random.choice(tf_data); active_games[room_id] = {"a": q["a"], "p": 1}; reply = f"🤔 صح أم خطأ؟\n{q['q']}"
+            elif is_match(msg, ["سباق"]):
+                s = random.choice(race_data); active_games[room_id] = {"a": s, "p": 3}; reply = f"🏎️ اكتب بسرعة:\n{s}"
+            elif is_match(msg, ["فعالية"]):
+                if f3alyat_list: reply = f"✨ {random.choice(f3alyat_list)}"
+            
             elif is_match(msg, ["توب"]):
                 top = sorted(points.items(), key=lambda x: x[1], reverse=True)[:5]
                 reply = "🏆 التوب:\n" + "\n".join([f"{i+1}. {api.get_profile(u).display_name if u else '..'} ({s})" for i, (u, s) in enumerate(top)])
+            
+            elif is_match(msg, ["حجر", "ورقة", "مقص"]):
+                res, win = play_rps(msg)
+                if res:
+                    reply = res
+                    if win: points[user_id] = points.get(user_id, 0) + 1; save_json("points.json", points)
+            
+            # التحقق من الإجابة لأي لعبة نشطة
             elif room_id in active_games and is_correct_answer(msg, active_games[room_id]["a"]):
                 p = active_games[room_id]["p"]; points[user_id] = points.get(user_id, 0) + p
                 save_json("points.json", points); reply = f"✅ صح! (+{p})"; del active_games[room_id]
 
-        # 🌝 5. الردود والمصيدة
+        # ==========================================
+        # 🌝 الردود
+        # ==========================================
         if not reply:
             clean = normalize(msg)
             if mentionees and room_id in group_settings.get("mention_enabled_groups", []):
@@ -241,7 +347,8 @@ def handle_message(event):
                 for m_id in mentionees:
                     if m_id != user_id: pending_mentions[room_id].append(m_id)
                 reply = random.choice(mention_jokes.get("on_mention", ["..."]))
-            elif clean in ["بوت", "يا بوت"]: reply = "عيون البوت 👀"
+            
+            elif clean in ["بوت", "يا بوت"]: reply = random.choice(bot_replies)
             elif clean in custom_replies: reply = custom_replies[clean]
 
         if reply: api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
