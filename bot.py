@@ -35,7 +35,7 @@ def save_json(file, data):
             json.dump(data, f, ensure_ascii=False)
     except: pass
 
-# تحميل كل "دماغ" البوت (الملفات)
+# تحميل الملفات (دماغ البوت)
 questions = load_json("questions.json", [])
 words = load_json("words.json", [])
 race_data = load_json("race.json", [])
@@ -50,19 +50,18 @@ marriages = load_json("marriages.json", {})
 economy = load_json("economy.json", {})
 group_settings = load_json("settings.json", {"mention_enabled_groups": []})
 
-# متغيرات التشغيل
+# متغيرات النظام
 GAMES_ENABLED = True 
 active_games = {} 
 learning_mode = {} 
 pending_mentions = {}
 
-# نظام البطولة
 tournament = {
     "state": "IDLE", "players": [], "names": {}, 
     "bracket": [], "winners": [], "current_match": None, "round_num": 1
 }
 
-# ================= دوال الذكاء =================
+# ================= دوال مساعدة =================
 def normalize(text):
     text = str(text).lower().strip()
     text = re.sub(r'[أإآ]', 'ا', text)
@@ -104,7 +103,7 @@ def play_rps(user_choice):
 
 # ================= السيرفر =================
 @app.route("/", methods=['GET'])
-def home(): return "BOT READY (NO LEAVE COMMAND) 🛡️"
+def home(): return "BOT READY (Games Menu Added) 🎮"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -130,14 +129,14 @@ def handle_message(event):
 
         reply = None
 
-        # 🕵️‍♂️ 1. المصيدة (أولوية قصوى)
+        # 🕵️‍♂️ 1. المصيدة (العودة)
         if room_id in pending_mentions and user_id in pending_mentions[room_id]:
             pending_mentions[room_id].remove(user_id)
             reply = random.choice(mention_jokes.get("on_return", ["وصل!"]))
             api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
             return
 
-        # 🛑 2. وضع التعليم (للأدمن)
+        # 🛑 2. وضع التعليم
         if user_id in learning_mode:
             kw = learning_mode[user_id]
             custom_replies[kw] = msg
@@ -147,9 +146,44 @@ def handle_message(event):
             return
 
         # ==========================================
-        # 👑 أوامر التحكم (بدون مغادرة)
+        # 🟢 قوائم المساعدة (Menus)
         # ==========================================
-        if normalize(msg) == ".a":
+        
+        # 🎮 قائمة الألعاب (كما طلبت)
+        if is_match(msg, ["العاب", "ألعاب", "games"]):
+            reply = """🎮 **قائمة الألعاب المتاحة:**
+1️⃣ **سؤال**: أسئلة عامة وثقافية.
+2️⃣ **رتب**: رتب حروف الكلمة.
+3️⃣ **سباق**: تحدي سرعة الكتابة.
+4️⃣ **صح غلط**: اختبر معلوماتك.
+5️⃣ **فعالية**: طلبات عشوائية للجروب.
+6️⃣ **حجر ورقة مقص**: تحدي ضد البوت.
+🏆 **توب**: عرض قائمة المتصدرين."""
+
+        # 🤖 قائمة الأوامر العامة
+        elif is_match(msg, ["الاوامر", "help", "menu"]):
+            reply = """🤖 **أوامر البوت العامة:**
+💰 **راتب**: لاستلام نقاطك اليومية.
+🪪 **ملفي**: لعرض بروفايلك ورتبتك.
+💍 **تزوج @**: للزواج من عضو.
+💔 **طلاق**: للانفصال.
+🎮 **العاب**: لعرض قائمة الألعاب.
+👮‍♂️ **.a**: لعرض المالك والمشرفين."""
+
+        # 👮‍♂️ قائمة الإدارة
+        elif is_match(msg, ["الادمن", "لوحة"]):
+            if user_id in admins: 
+                reply = """👮‍♂️ **لوحة التحكم:**
+• سجل (كلمة) / حذف (كلمة)
+• رفع ادمن @ / تنزيل ادمن @
+• قفل اللعب / فتح اللعب
+• تفعيل المنشن / قفل المنشن
+• بطولة / ابدأ البطولة / كنسل"""
+
+        # ==========================================
+        # 👑 أوامر التحكم
+        # ==========================================
+        elif normalize(msg) == ".a":
             txt = f"👑 المالك والمشرفين:\n⭐ المالك: Not Play\n──────────────\n"
             for admin_id in admins:
                 if admin_id != OWNER_ID:
@@ -174,17 +208,7 @@ def handle_message(event):
                     else: res.append("ليس أدمن!")
                 save_json("admins.json", admins); reply = "\n".join(res)
 
-        elif is_match(msg, ["الادمن", "لوحة"]):
-            if user_id in admins: 
-                reply = """👮‍♂️ **لوحة التحكم:**
-• سجل (كلمة) / حذف (كلمة)
-• رفع ادمن @ / تنزيل ادمن @
-• قفل اللعب / فتح اللعب
-• تفعيل المنشن / قفل المنشن
-• بطولة / ابدأ البطولة / كنسل
-(تم إلغاء أمر المغادرة لضمان البقاء)"""
-
-        # 📢 أمر "قول" (أبقينها لك)
+        # 🗣️ أوامر قديمة
         elif msg.startswith("قول "):
             txt = msg.replace("قول ", "", 1).strip()
             if txt: reply = txt
@@ -214,7 +238,7 @@ def handle_message(event):
             if kw in custom_replies: del custom_replies[kw]; save_json("custom_replies.json", custom_replies); reply = "🗑️ تم الحذف."
 
         # ==========================================
-        # 🏆 البطولات
+        # 🏆 البطولة
         # ==========================================
         elif is_match(msg, ["بطولة"]) and user_id in admins:
             tournament = {"state": "REGISTER", "players": [], "names": {}, "bracket": [], "winners": [], "current_match": None, "round_num": 1}
@@ -301,17 +325,12 @@ def handle_message(event):
             reply = f"🪪 {user_name}\n💰 {p} | 🏆 {get_rank(p)}\n❤️ {status}"
 
         # ==========================================
-        # 🎮 الألعاب (الذكاء الموزع على الملفات)
+        # 🎮 تنفيذ الألعاب (من كل الملفات)
         # ==========================================
         elif GAMES_ENABLED and tournament["state"] == "IDLE":
-            if is_match(msg, ["الاوامر", "help"]): 
-                reply = """🎮 الألعاب:
-• سؤال / رتب / صح غلط / سباق / فعالية
-• حجر / ورقة / مقص
-• توب / راتب / ملفي / تزوج
-• .a (للمشرفين)"""
-            # 👇 هنا البوت بيستخدم كل الملفات
-            elif is_match(msg, ["سؤال"]):
+            
+            # 👇 هنا توزيع الذكاء على الملفات
+            if is_match(msg, ["سؤال"]):
                 q = random.choice(questions); active_games[room_id] = {"a": q["a"], "p": 2}; reply = f"🧠 سؤال: {q['q']}"
             elif is_match(msg, ["رتب"]):
                 w = random.choice(words); s = "".join(random.sample(w, len(w))); active_games[room_id] = {"a": w, "p": 2}; reply = f"✏️ رتب: {s}"
@@ -332,16 +351,17 @@ def handle_message(event):
                     reply = res
                     if win: points[user_id] = points.get(user_id, 0) + 1; save_json("points.json", points)
             
-            # التحقق من الإجابة لأي لعبة نشطة
+            # التحقق من الإجابة لأي لعبة شغالة حالياً
             elif room_id in active_games and is_correct_answer(msg, active_games[room_id]["a"]):
                 p = active_games[room_id]["p"]; points[user_id] = points.get(user_id, 0) + p
                 save_json("points.json", points); reply = f"✅ صح! (+{p})"; del active_games[room_id]
 
         # ==========================================
-        # 🌝 الردود
+        # 🌝 الردود والمصيدة
         # ==========================================
         if not reply:
             clean = normalize(msg)
+            # المصيدة عند المنشن
             if mentionees and room_id in group_settings.get("mention_enabled_groups", []):
                 if room_id not in pending_mentions: pending_mentions[room_id] = []
                 for m_id in mentionees:
