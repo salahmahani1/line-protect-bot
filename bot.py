@@ -46,7 +46,6 @@ f3alyat_list = load_json("f3alyat.json", ["صور خلفية جوالك", "آخ�
 points = load_json("points.json", {})
 bot_replies = load_json("replies.json", ["هلا والله", "بخير", "منور"]) 
 
-# المشرفين
 admins = load_json("admins.json", [OWNER_ID])
 if OWNER_ID not in admins: admins.append(OWNER_ID)
 
@@ -69,7 +68,6 @@ def normalize(text):
     return text
 
 def is_match(user_input, commands_list):
-    """ دالة للأوامر فقط """
     if isinstance(commands_list, str): commands_list = [commands_list]
     u = normalize(user_input)
     for cmd in commands_list:
@@ -96,20 +94,18 @@ def play_rps(user_choice):
     elif "مقص" in uc: user_clean = "مقص"
     else: return None, None
 
-    if user_clean == bot_choice:
-        res, win = "تعادل! 🤝", False
+    if user_clean == bot_choice: res, win = "تعادل! 🤝", False
     elif (user_clean == "حجر" and bot_choice == "مقص") or \
          (user_clean == "ورقة" and bot_choice == "حجر") or \
          (user_clean == "مقص" and bot_choice == "ورقة"):
         res, win = "أنت فزت! 🎉", True
-    else:
-        res, win = "أنا فزت! 😜", False
+    else: res, win = "أنا فزت! 😜", False
         
     return f"أنت: {emojis[user_clean]}\nأنا: {emojis[bot_choice]}\n\n{res}", win
 
 # ================= السيرفر =================
 @app.route("/", methods=['GET'])
-def home(): return "BOT READY (FINAL STRICT MODE) 🔒"
+def home(): return "BOT READY (ZERO TOLERANCE) 🛡️"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -130,8 +126,7 @@ def handle_message(event):
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
     
-    # ✅ تحقق صارم جداً للرد (Reply)
-    # quoteToken يكون موجود فقط إذا كانت الرسالة رداً على رسالة أخرى
+    # ✅ شرط الرد الحصري (Reply)
     is_reply_action = getattr(event.message, "quote_token", None) is not None
 
     mentionees = []
@@ -147,33 +142,26 @@ def handle_message(event):
         reply = None
 
         # 👑 1. الإدارة
-        if is_match(msg, ["ايدي", "id"]):
-            reply = f"🆔 ID: {user_id}"
-
+        if is_match(msg, ["ايدي", "id"]): reply = f"🆔 ID: {user_id}"
         elif is_match(msg, ["الادمن", "المشرفين"]):
             txt = "👑 المشرفين:\n"
             for admin_id in admins:
                 try: txt += f"- {api.get_profile(admin_id).display_name}\n"
                 except: txt += f"- {admin_id[:4]}..\n"
             reply = txt
-
         elif is_match(msg, ["رفع ادمن"]) and user_id == OWNER_ID:
             if mentionees:
                 for m_id in mentionees:
                     if m_id not in admins: admins.append(m_id)
-                save_json("admins.json", admins)
-                reply = "✅ تم الترقية."
-
+                save_json("admins.json", admins); reply = "✅ تم الترقية."
         elif is_match(msg, ["تنزيل ادمن"]) and user_id == OWNER_ID:
             if mentionees:
                 for m_id in mentionees:
                     if m_id in admins and m_id != OWNER_ID: admins.remove(m_id)
-                save_json("admins.json", admins)
-                reply = "🗑️ تم التنزيل."
+                save_json("admins.json", admins); reply = "🗑️ تم التنزيل."
 
         # 🗣️ 2. قول
-        elif msg.startswith("قول "):
-            reply = msg.replace("قول ", "", 1)
+        elif msg.startswith("قول "): reply = msg.replace("قول ", "", 1)
 
         # 🛠️ 3. التحكم
         elif is_match(msg, ["قفل اللعب"]):
@@ -270,15 +258,19 @@ def handle_message(event):
             elif is_match(msg, ["توب"]):
                 top = sorted(points.items(), key=lambda x: x[1], reverse=True)[:5]
                 reply = "🏆 الأوائل:\n" + "\n".join([f"{i+1}. {api.get_profile(u).display_name if u else '..'} ({s})" for i, (u, s) in enumerate(top)]) if top else "مفيش نقاط."
+            
+            # ✅ الرد على الألعاب (مع منع الرد العشوائي)
             elif room_id in active_games:
                 if is_correct_answer(msg, active_games[room_id]["a"]):
                     p = active_games[room_id]["p"]; points[user_id] = points.get(user_id, 0) + p; save_json("points.json", points); reply = f"✅ كفو! (+{p})"; del active_games[room_id]
+                else:
+                    # 🛑 هنا التعديل المهم: لو الإجابة غلط، لا ترد بشيء! (كان بيرد عشوائي هنا)
+                    reply = None 
 
-        # 🌝 7. الردود من الملف (الشرط الصارم)
-        # لن يدخل هنا إلا إذا لم يكن هناك أمر لعبة أو بطولة أو إدارة
+        # 🌝 7. الردود من الملف (الشرط الصارم فقط)
         if not reply:
-            # 🛑 يجب أن يكون (Reply) حقيقي بعلامة الاقتباس
-            # أو كلمة (بوت) حرفياً فقط لا غير
+            # 🛑 الشرط: لازم يكون (Reply) حقيقي بعلامة الاقتباس
+            # أو كلمة (بوت) حرفياً فقط
             clean_msg = normalize(msg)
             is_direct_call = (clean_msg in ["بوت", "يا بوت", "bot"])
 
