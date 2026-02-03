@@ -13,8 +13,7 @@ from linebot.v3.exceptions import InvalidSignatureError
 # ================= إعدادات البوت =================
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
-
-# 🔴 ضع الآيدي الخاص بك هنا لتكون المالك
+# 🔴 ضع الآيدي الخاص بك هنا
 OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d"
 
 app = Flask(__name__)
@@ -45,8 +44,8 @@ race_data = load_json("race.json", ["سبحان الله", "الحمد لله"])
 tf_data = load_json("truefalse.json", [{"q": "النار باردة", "a": "غلط"}])
 f3alyat_list = load_json("f3alyat.json", ["صور خلفية جوالك", "آخر صورة في الاستوديو"])
 points = load_json("points.json", {})
-# تحميل الردود من الملف
-bot_replies = load_json("replies.json", ["هلا والله", "بخير", "منور"]) 
+# ✅ تحميل الردود العشوائية من الملف
+bot_replies = load_json("replies.json", ["هلا والله", "بخير", "منور", "عيون البوت"]) 
 
 # المشرفين والجروبات
 admins = load_json("admins.json", [OWNER_ID])
@@ -112,7 +111,7 @@ def play_rps(user_choice):
 
 # ================= السيرفر =================
 @app.route("/", methods=['GET'])
-def home(): return "BOT READY (REPLY ONLY MODE) 🚀"
+def home(): return "BOT READY (STRICT REPLY MODE) 🚀"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -133,7 +132,8 @@ def handle_message(event):
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
     
-    # ✅ التحقق: هل الرسالة "رد" (Reply)؟
+    # ✅ التحقق الصارم: هل الرسالة "رد" (Reply)؟
+    # في نظام لاين، الرسالة التي تكون رداً تحتوي على quoteToken
     is_reply_message = getattr(event.message, "quote_token", None) is not None
 
     mentionees = []
@@ -325,10 +325,11 @@ def handle_message(event):
 
         # 🌝 7. الردود التلقائية (من الملف)
         if not reply:
-            # 🛑 الشرط الجديد: يرد فقط إذا كانت الرسالة "رد" (Reply) أو مناداة صريحة
-            direct_triggers = ["بوت", "يا بوت", "bot"]
+            # 🛑 التعديل هنا: يرد فقط لو كان "رد" (Reply) أو مناداة صريحة
+            direct_call = ["بوت", "يا بوت", "bot"]
             
-            if is_reply_message or is_match(msg, direct_triggers):
+            # 1. إذا الرسالة رد (Swipe Reply) أو 2. مناداة صريحة
+            if is_reply_message or is_match(msg, direct_call):
                 if bot_replies:
                     reply = random.choice(bot_replies)
             
