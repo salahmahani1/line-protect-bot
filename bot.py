@@ -13,6 +13,7 @@ from linebot.v3.exceptions import InvalidSignatureError
 # ================= إعدادات البوت =================
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
+
 # 🔴 ضع الآيدي الخاص بك هنا
 OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d"
 
@@ -44,8 +45,8 @@ race_data = load_json("race.json", ["سبحان الله", "الحمد لله"])
 tf_data = load_json("truefalse.json", [{"q": "النار باردة", "a": "غلط"}])
 f3alyat_list = load_json("f3alyat.json", ["صور خلفية جوالك", "آخر صورة في الاستوديو"])
 points = load_json("points.json", {})
-# ✅ تحميل الردود العشوائية من الملف
-bot_replies = load_json("replies.json", ["هلا والله", "بخير", "منور", "عيون البوت"]) 
+# تحميل الردود من الملف
+bot_replies = load_json("replies.json", ["هلا والله", "بخير", "منور"]) 
 
 # المشرفين والجروبات
 admins = load_json("admins.json", [OWNER_ID])
@@ -62,7 +63,7 @@ tournament = {
     "bracket": [], "winners": [], "current_match": None, "round_num": 1
 }
 
-# ================= 🧠 الذكاء الاصطناعي والدوال المساعدة =================
+# ================= 🧠 الذكاء الاصطناعي (للأوامر فقط) =================
 def normalize(text):
     text = str(text).lower().strip()
     text = re.sub(r'[أإآ]', 'ا', text)
@@ -72,6 +73,7 @@ def normalize(text):
     return text
 
 def is_match(user_input, commands_list):
+    """ دالة الذكاء الاصطناعي (تستخدم للأوامر الإدارية والألعاب فقط) """
     if isinstance(commands_list, str): commands_list = [commands_list]
     u = normalize(user_input)
     for cmd in commands_list:
@@ -111,7 +113,7 @@ def play_rps(user_choice):
 
 # ================= السيرفر =================
 @app.route("/", methods=['GET'])
-def home(): return "BOT READY (STRICT REPLY MODE) 🚀"
+def home(): return "BOT READY (STRICT REPLY v2) 🚀"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -132,9 +134,9 @@ def handle_message(event):
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
     
-    # ✅ التحقق الصارم: هل الرسالة "رد" (Reply)؟
-    # في نظام لاين، الرسالة التي تكون رداً تحتوي على quoteToken
-    is_reply_message = getattr(event.message, "quote_token", None) is not None
+    # ✅ 1. هل الرسالة "رد" (Reply)؟ (تحقق صارم)
+    # quoteToken يكون موجوداً فقط إذا قام المستخدم بعمل Swipe أو Reply على رسالة
+    is_reply_action = getattr(event.message, "quote_token", None) is not None
 
     mentionees = []
     if event.message.mention:
@@ -323,17 +325,24 @@ def handle_message(event):
                 if is_correct_answer(msg, active_games[room_id]["a"]):
                     p = active_games[room_id]["p"]; points[user_id] = points.get(user_id, 0) + p; save_json("points.json", points); reply = f"✅ كفو! (+{p})"; del active_games[room_id]
 
-        # 🌝 7. الردود التلقائية (من الملف)
+        # 🌝 7. الردود التلقائية (معدل: صارم جداً)
         if not reply:
-            # 🛑 التعديل هنا: يرد فقط لو كان "رد" (Reply) أو مناداة صريحة
-            direct_call = ["بوت", "يا بوت", "bot"]
+            # 🛑 الشرط الحاسم:
+            # 1. هل الرسالة تحتوي على اقتباس (Swipe/Reply)؟
+            # 2. هل الرسالة تبدأ بكلمة "بوت" أو "bot" حرفياً؟
             
-            # 1. إذا الرسالة رد (Swipe Reply) أو 2. مناداة صريحة
-            if is_reply_message or is_match(msg, direct_call):
+            is_direct_call = False
+            for trigger in ["بوت", "يا بوت", "bot"]:
+                # لا نستخدم is_match هنا لتجنب الأخطاء، نستخدم startswith فقط
+                if msg == trigger or msg.startswith(trigger + " "):
+                    is_direct_call = True
+                    break
+
+            if is_reply_action or is_direct_call:
                 if bot_replies:
                     reply = random.choice(bot_replies)
             
-            # المنشن الساخر
+            # المنشن الساخر (بشروط خاصة)
             elif mentionees and room_id in group_settings["mention_enabled_groups"]:
                 if words: reply = f"{random.choice(words)} 🌚"
 
