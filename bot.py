@@ -14,7 +14,6 @@ from linebot.v3.exceptions import InvalidSignatureError
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
 
-# 🔴 ضع الآيدي الخاص بك هنا لتكون المالك
 OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d"
 
 app = Flask(__name__)
@@ -45,6 +44,10 @@ race_data = load_json("race.json", ["سبحان الله", "الحمد لله"])
 tf_data = load_json("truefalse.json", [{"q": "النار باردة", "a": "غلط"}])
 f3alyat_list = load_json("f3alyat.json", ["صور خلفية جوالك", "آخر صورة في الاستوديو"])
 points = load_json("points.json", {})
+# ملف الردود المخصصة (الذي ستعلم البوت فيه)
+custom_replies = load_json("custom_replies.json", {})
+# ردود البوت الأساسية
+bot_replies = load_json("replies.json", ["آمرني؟ 👀", "هلا والله", "لبيه"])
 
 # المشرفين
 admins = load_json("admins.json", [OWNER_ID])
@@ -54,6 +57,8 @@ if OWNER_ID not in admins: admins.append(OWNER_ID)
 GAMES_ENABLED = True 
 RPS_ENABLED = True 
 active_games = {} 
+learning_mode = {} # لتخزين حالة التعليم (مين بيعلم البوت وايه الكلمة)
+
 tournament = {
     "state": "IDLE", "players": [], "names": {}, 
     "bracket": [], "winners": [], "current_match": None, "round_num": 1
@@ -69,13 +74,12 @@ def normalize(text):
     return text
 
 def is_match(user_input, commands_list):
-    """ دالة للأوامر فقط """
     if isinstance(commands_list, str): commands_list = [commands_list]
     u = normalize(user_input)
     for cmd in commands_list:
         c = normalize(cmd)
         if u == c: return True
-        if u.startswith(c): return True 
+        if u.startswith(c) and len(c) > 3: return True 
         if len(c) > 3 and SequenceMatcher(None, u, c).ratio() > 0.85: return True
     return False
 
@@ -107,7 +111,7 @@ def play_rps(user_choice):
 
 # ================= السيرفر =================
 @app.route("/", methods=['GET'])
-def home(): return "BOT READY (SILENT v3) 🔇"
+def home(): return "BOT READY (LEARNING MODE v2) 🧠"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -122,12 +126,15 @@ def callback():
 # ================= معالجة الرسائل =================
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    global tournament, GAMES_ENABLED, RPS_ENABLED, active_games, points, admins
+    global tournament, GAMES_ENABLED, RPS_ENABLED, active_games, points, admins, custom_replies, learning_mode
     
     msg = event.message.text.strip()
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
     
+    # التحقق من الـ Reply
+    is_reply_action = getattr(event.message, "quote_token", None) is not None
+
     mentionees = []
     if event.message.mention:
         mentionees = [m.user_id for m in event.message.mention.mentionees]
@@ -140,14 +147,35 @@ def handle_message(event):
 
         reply = None
 
-        # 👑 1. أوامر الإدارة (فقط للأدمن/المالك)
+        # 🛑 الأولوية 1: هل الأدمن في وضع "تعليم البوت"؟
+        if user_id in learning_mode:
+            # هنا البوت ينتظر الرد ليحفظه
+            keyword_to_learn = learning_mode[user_id]
+            custom_replies[keyword_to_learn] = msg # حفظ الرسالة كرد
+            save_json("custom_replies.json", custom_replies)
+            del learning_mode[user_id] # الخروج من وضع التعليم
+            reply = f"✅ تم الحفظ! لما حد يقول ({keyword_to_learn}) هرد عليه بـ:\n{msg}"
+            
+            # إرسال الرد فوراً وإنهاء الدالة
+            api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
+            return
+
+        # 👑 2. أوامر الإدارة (منفصلة)
         if is_match(msg, ["ايدي", "id"]): reply = f"🆔 ID: {user_id}"
-        elif is_match(msg, ["الادمن", "المشرفين"]):
-            txt = "👑 المشرفين:\n"
-            for admin_id in admins:
-                try: txt += f"- {api.get_profile(admin_id).display_name}\n"
-                except: txt += f"- {admin_id[:4]}..\n"
-            reply = txt
+        
+        elif is_match(msg, ["الادمن", "المشرفين", "admins"]):
+            if user_id in admins:
+                txt = "👮‍♂️ **لوحة تحكم الأدمن**:\n"
+                txt += "1. سجل (الكلمة) -> لتعليم البوت\n"
+                txt += "2. حذف (الكلمة) -> لمسح رد\n"
+                txt += "3. رفع/تنزيل ادمن @\n"
+                txt += "4. بطولة / ابدأ / كنسل\n"
+                txt += "5. قفل/فتح اللعب\n"
+                txt += "6. قفل/فتح حجر"
+                reply = txt
+            else:
+                reply = "❌ هذا الأمر للمشرفين فقط."
+
         elif is_match(msg, ["رفع ادمن"]) and user_id == OWNER_ID:
             if mentionees:
                 for m_id in mentionees:
@@ -159,10 +187,30 @@ def handle_message(event):
                     if m_id in admins and m_id != OWNER_ID: admins.remove(m_id)
                 save_json("admins.json", admins); reply = "🗑️ تم التنزيل."
 
-        # 🗣️ 2. أمر قول (يردد الكلام)
+        # 🧠 3. نظام التعليم (للمشرفين فقط)
+        elif msg.startswith("سجل "):
+            if user_id in admins:
+                keyword = normalize(msg.replace("سجل ", "", 1).strip())
+                if keyword:
+                    learning_mode[user_id] = keyword
+                    reply = f"✏️ تمام يا ريس، ابعتلي دلوقتي الكلام أو الرابط اللي عايزني أرد بيه لما حد يقول '{keyword}'..."
+                else: reply = "❌ اكتب الكلمة بعد الأمر، مثلاً: سجل احمد"
+            else: reply = "❌ للأدمن فقط."
+
+        elif msg.startswith("حذف "):
+            if user_id in admins:
+                keyword = normalize(msg.replace("حذف ", "", 1).strip())
+                if keyword in custom_replies:
+                    del custom_replies[keyword]
+                    save_json("custom_replies.json", custom_replies)
+                    reply = f"🗑️ تم حذف الرد الخاص بـ: {keyword}"
+                else: reply = "❌ الكلمة دي مش مسجلة عندي."
+            else: reply = "❌ للأدمن فقط."
+
+        # 🗣️ 4. أمر قول
         elif msg.startswith("قول "): reply = msg.replace("قول ", "", 1)
 
-        # 🛠️ 3. التحكم (قفل/فتح)
+        # 🛠️ 5. التحكم
         elif is_match(msg, ["قفل اللعب"]):
             if user_id in admins: GAMES_ENABLED = False; active_games.pop(room_id, None); reply = "🔒 تم القفل."
         elif is_match(msg, ["فتح اللعب"]):
@@ -174,7 +222,7 @@ def handle_message(event):
         elif is_match(msg, ["حذف", "stop"]):
             if room_id in active_games: del active_games[room_id]; reply = "🏳️ تم الحذف."
 
-        # 🏆 4. البطولة
+        # 🏆 6. البطولة
         elif is_match(msg, ["بطولة"]) and user_id in admins:
             tournament = {"state": "REGISTER", "players": [], "names": {}, "bracket": [], "winners": [], "current_match": None, "round_num": 1}
             reply = "🏆 فتح التسجيل! اكتب ( سجلني )"
@@ -232,7 +280,7 @@ def handle_message(event):
                         match["q_count"] += 1; match["q_data"] = random.choice(questions)
                         reply = f"✅ صح!\nس{match['q_count']}: {match['q_data']['q']}"
 
-        # 🪨 5. حجر ورقة مقص
+        # 🪨 7. حجر ورقة مقص
         elif is_match(msg, ["حجر", "ورقة", "مقص"]):
             if RPS_ENABLED:
                 res, win = play_rps(msg)
@@ -240,10 +288,10 @@ def handle_message(event):
                     reply = res
                     if win: points[user_id] = points.get(user_id, 0) + 1; save_json("points.json", points)
 
-        # 🎮 6. الألعاب
+        # 🎮 8. الألعاب العامة (منفصلة)
         elif GAMES_ENABLED and tournament["state"] != "MATCH_ACTIVE":
             if is_match(msg, [".h", "help", "menu", "الاوامر"]):
-                reply = "🎮 الأوامر: سؤال، رتب، صح غلط، سباق، فعالية، توب\n🪨 حجر، ورقة، مقص\n🏆 بطولة: سجلني، جاهز"
+                reply = "🎮 **قائمة الألعاب**:\nسؤال، رتب، صح غلط، سباق، فعالية، توب\n🪨 حجر، ورقة، مقص\n🏆 بطولة (للمسجلين)"
             elif is_match(msg, ["سؤال"]):
                 q = random.choice(questions); active_games[room_id] = {"a": q["a"], "p": 2}; reply = f"🧠 سؤال: {q['q']}"
             elif is_match(msg, ["رتب"]):
@@ -258,12 +306,20 @@ def handle_message(event):
                 top = sorted(points.items(), key=lambda x: x[1], reverse=True)[:5]
                 reply = "🏆 الأوائل:\n" + "\n".join([f"{i+1}. {api.get_profile(u).display_name if u else '..'} ({s})" for i, (u, s) in enumerate(top)]) if top else "مفيش نقاط."
             elif room_id in active_games:
-                # الرد فقط إذا الإجابة صحيحة
                 if is_correct_answer(msg, active_games[room_id]["a"]):
                     p = active_games[room_id]["p"]; points[user_id] = points.get(user_id, 0) + p; save_json("points.json", points); reply = f"✅ كفو! (+{p})"; del active_games[room_id]
 
-        # ⛔ لا يوجد else أو fallback نهائياً
-        # البوت الآن "أصم وأبكم" إلا إذا استدعيت إحدى الأوامر أعلاه.
+        # 🌝 9. الردود الذكية (المخصصة + بوت)
+        if not reply:
+            clean_msg = normalize(msg)
+            
+            # 1. الرد على "بوت"
+            if clean_msg in ["بوت", "يا بوت", "bot"]:
+                reply = random.choice(bot_replies)
+            
+            # 2. الردود المخصصة (التي تعلمها البوت)
+            elif clean_msg in custom_replies:
+                reply = custom_replies[clean_msg]
 
         if reply:
             api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
