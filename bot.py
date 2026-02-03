@@ -17,8 +17,10 @@ from linebot.v3.exceptions import InvalidSignatureError
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
 
-OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d"
-
+OWNERS = [
+    "U9ecd575f8df0e62798f4c8ecc9738d5d",
+    "U3617621ee527f90ad2ee0231c8bf973f",
+]
 
 app = Flask(__name__)
 
@@ -64,7 +66,7 @@ marriages = load_json("marriages.json", {})
 custom_replies = load_json("custom_replies.json", {})
 settings = load_json("settings.json", {"games_locked": []})
 
-admins = list(set(load_json("admins.json", []) + [OWNER_ID]))
+admins = list(set(load_json("admins.json", []) + OWNERS))
 save_json("admins.json", admins)
 
 
@@ -203,6 +205,49 @@ def handle_message(event):
         # ================== ADMIN ==================
 
         elif user_id in admins:
+            
+            elif match(msg, ["رفع ادمن","اضافة ادمن"]):
+
+    if event.message.mention:
+
+        target = event.message.mention.mentionees[0].user_id
+
+        if target not in admins:
+            admins.append(target)
+            save_json("admins.json", admins)
+
+            reply = "✅ تم رفعه أدمن!"
+
+elif match(msg, ["تنزيل ادمن","حذف ادمن"]):
+
+    if event.message.mention:
+
+        target = event.message.mention.mentionees[0].user_id
+
+        if target not in OWNERS:
+
+            if target in admins:
+                admins.remove(target)
+                save_json("admins.json", admins)
+
+                reply = "🗑️ تم تنزيله من الأدمن."
+
+elif match(msg, ["الادمن","الاداريين"]):
+
+    text = "👮 قائمة الأدمن:\n"
+
+    for ad in admins:
+        try:
+            n = api.get_profile(ad).display_name
+        except:
+            n = "Admin"
+
+        if ad in OWNERS:
+            text += f"👑 {n}\n"
+        else:
+            text += f"🔹 {n}\n"
+
+    reply = text
 
             if match(msg, ["فتح الالعاب","تشغيل الالعاب"]):
                 if room_id in settings["games_locked"]:
