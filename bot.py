@@ -1,3 +1,11 @@
+
+# ================= إعدادات البوت =================
+CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
+CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
+
+    app.run(host="0.0.0.0", port=port)
+
+
 from flask import Flask, request, abort
 import json, random, os, re
 from difflib import SequenceMatcher
@@ -45,10 +53,9 @@ tf_data = load_json("truefalse.json", [{"q": "النار باردة", "a": "غل
 f3alyat_list = load_json("f3alyat.json", ["صور شاشتك"])
 points = load_json("points.json", {})
 
-# الردود الذكية
+# الردود والمصيدة
 custom_replies = load_json("custom_replies.json", {})
 bot_replies = load_json("replies.json", ["آمرني؟ 👀", "هلا والله"])
-# ✅ ملف نكت المنشن الجديد
 mention_jokes = load_json("mentions.json", {
     "on_mention": ["تلاقيه نايم 😴"],
     "on_return": ["أهو جه أهو 😂"]
@@ -57,7 +64,6 @@ mention_jokes = load_json("mentions.json", {
 admins = load_json("admins.json", [OWNER_ID])
 if OWNER_ID not in admins: admins.append(OWNER_ID)
 
-# إعدادات المجموعات (لتفعيل/قفل المنشن)
 group_settings = load_json("settings.json", {"mention_enabled_groups": []})
 
 # متغيرات النظام
@@ -65,10 +71,7 @@ GAMES_ENABLED = True
 RPS_ENABLED = True 
 active_games = {} 
 learning_mode = {} 
-
-# 🔥 قائمة المراقبة (مين اللي اتعمل له منشن ومستنيينه يظهر)
-# الهيكل: { "GroupID": ["UserID1", "UserID2"] }
-pending_mentions = {}
+pending_mentions = {} # قائمة المصيدة
 
 tournament = {
     "state": "IDLE", "players": [], "names": {}, 
@@ -122,7 +125,7 @@ def play_rps(user_choice):
 
 # ================= السيرفر =================
 @app.route("/", methods=['GET'])
-def home(): return "BOT READY (MENTION TRAP ACTIVATED 🪤) 🚀"
+def home(): return "BOT READY (.a Added) 🚀"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -143,19 +146,14 @@ def handle_message(event):
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
     
-    # 🕵️‍♂️ فحص هل المتحدث كان "مطلوباً" (حد عمله منشن قبل كدا)؟
-    # يتم الفحص فقط إذا كانت الخاصية مفعلة في الجروب
+    # 🕵️‍♂️ فحص المصيدة (هل الشخص ده كان معمول له منشن؟)
     user_was_mentioned = False
     if room_id in group_settings["mention_enabled_groups"]:
         if room_id in pending_mentions:
             if user_id in pending_mentions[room_id]:
-                # 🚨 أمسك حرامي! الشخص المطلوب ظهر وتكلم
                 user_was_mentioned = True
-                # نحذفه من قائمة الانتظار
                 pending_mentions[room_id].remove(user_id)
-                # لو القائمة فضيت نحذف الجروب منها لتوفير الذاكرة
-                if not pending_mentions[room_id]:
-                    del pending_mentions[room_id]
+                if not pending_mentions[room_id]: del pending_mentions[room_id]
 
     mentionees = []
     if event.message.mention:
@@ -169,15 +167,14 @@ def handle_message(event):
 
         reply = None
 
-        # 🛑 (الأولوية القصوى) إذا الشخص المطلوب ظهر!
+        # 🛑 1. رد المصيدة (أولوية قصوى)
         if user_was_mentioned:
             if "on_return" in mention_jokes and mention_jokes["on_return"]:
                 reply = random.choice(mention_jokes["on_return"])
-                # نرسل الرد فوراً ونوقف باقي الكود عشان ما يتداخلش
                 api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
                 return
 
-        # 🛑 وضع التعليم
+        # 🛑 2. وضع التعليم
         if user_id in learning_mode:
             keyword = learning_mode[user_id]
             custom_replies[keyword] = msg 
@@ -187,13 +184,22 @@ def handle_message(event):
             api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
             return
 
-        # 👑 1. أوامر الإدارة
+        # 👑 3. أوامر الإدارة (تم إضافة .a هنا)
         if is_match(msg, ["ايدي", "id"]): reply = f"🆔 ID: {user_id}"
-        elif is_match(msg, ["الادمن", "المشرفين"]):
+        
+        # ✅ الأمر .a والادمن
+        elif is_match(msg, ["الادمن", "المشرفين", "admins", ".a"]):
             if user_id in admins:
-                txt = "👮‍♂️ **لوحة التحكم**:\n• سجل/حذف (الكلمة)\n• تفعيل/قفل المنشن (مهم للمصيدة)\n• بطولة/ألعاب\n• رفع/تنزيل ادمن"
+                # لو أدمن -> نعرض لوحة التحكم
+                txt = "👮‍♂️ **لوحة التحكم**:\n• سجل/حذف (الكلمة)\n• تفعيل/قفل المنشن (للمصيدة)\n• بطولة/ألعاب\n• رفع/تنزيل ادمن"
                 reply = txt
-            else: reply = "⛔ للمشرفين فقط"
+            else:
+                # لو عضو عادي -> نعرض أسماء المشرفين عشان يعرفهم
+                admin_names = ""
+                for admin_id in admins:
+                    try: admin_names += f"- {api.get_profile(admin_id).display_name}\n"
+                    except: admin_names += f"- {admin_id[:4]}..\n"
+                reply = f"👑 **قائمة المشرفين:**\n{admin_names}"
 
         elif is_match(msg, ["رفع ادمن"]) and user_id == OWNER_ID:
             if mentionees:
@@ -206,23 +212,20 @@ def handle_message(event):
                     if m_id in admins and m_id != OWNER_ID: admins.remove(m_id)
                 save_json("admins.json", admins); reply = "🗑️ تم التنزيل."
 
-        # ⚙️ التحكم في المنشن (المصيدة)
         elif is_match(msg, ["تفعيل المنشن"]):
             if user_id in admins:
                 if room_id not in group_settings["mention_enabled_groups"]:
                     group_settings["mention_enabled_groups"].append(room_id)
                     save_json("settings.json", group_settings)
-                    reply = "🔔 تم تفعيل نظام المنشن (المصيدة) 😂"
-                else: reply = "مفعل بالفعل."
+                    reply = "🔔 تم تفعيل المصيدة 😂"
+                else: reply = "مفعلة."
         elif is_match(msg, ["قفل المنشن"]):
             if user_id in admins:
                 if room_id in group_settings["mention_enabled_groups"]:
                     group_settings["mention_enabled_groups"].remove(room_id)
                     save_json("settings.json", group_settings)
-                    reply = "🔕 تم إيقاف نظام المنشن."
-                else: reply = "متوقف بالفعل."
+                    reply = "🔕 تم القفل."
 
-        # 🧠 التعليم
         elif msg.startswith("سجل ") and user_id in admins:
             kw = normalize(msg.replace("سجل ", "", 1).strip())
             if kw: learning_mode[user_id] = kw; reply = "✏️ ارسل الرد الآن..."
@@ -230,16 +233,14 @@ def handle_message(event):
             kw = normalize(msg.replace("حذف ", "", 1).strip())
             if kw in custom_replies: del custom_replies[kw]; save_json("custom_replies.json", custom_replies); reply = "🗑️ تم الحذف."
 
-        # 🗣️ قول
         elif msg.startswith("قول "): reply = msg.replace("قول ", "", 1)
 
-        # 🛠️ التحكم
         elif is_match(msg, ["قفل اللعب"]) and user_id in admins: GAMES_ENABLED = False; active_games.pop(room_id, None); reply = "🔒 تم القفل."
         elif is_match(msg, ["فتح اللعب"]) and user_id in admins: GAMES_ENABLED = True; reply = "🔓 تم الفتح."
         elif is_match(msg, ["حذف", "stop"]): 
              if room_id in active_games: del active_games[room_id]; reply = "🏳️ تم الحذف."
 
-        # 🏆 4. البطولة (تم الاختصار للحفاظ على المساحة، نفس المنطق السابق)
+        # 🏆 4. البطولة
         elif is_match(msg, ["بطولة"]) and user_id in admins:
             tournament = {"state": "REGISTER", "players": [], "names": {}, "bracket": [], "winners": [], "current_match": None, "round_num": 1}
             reply = "🏆 التسجيل: اكتب ( سجلني )"
@@ -265,7 +266,7 @@ def handle_message(event):
                 if is_correct_answer(msg, match["q_data"]["a"]):
                     if user_id == match["p1"]: match["s1"] += 1
                     else: match["s2"] += 1
-                    if match["q_count"] >= 5: # 5 اسئلة عشان السرعة
+                    if match["q_count"] >= 5: 
                         win = match["p1"] if match["s1"] >= match["s2"] else match["p2"]
                         tournament["winners"].append(win); tournament["bracket"].pop(0); tournament["state"] = "MATCH_WAITING"
                         reply = f"🏁 الفائز: {tournament['names'][win]} 🎉"
@@ -285,23 +286,18 @@ def handle_message(event):
             elif room_id in active_games and is_correct_answer(msg, active_games[room_id]["a"]):
                 p = active_games[room_id]["p"]; points[user_id] = points.get(user_id, 0) + p; save_json("points.json", points); reply = f"✅ كفو! (+{p})"; del active_games[room_id]
 
-        # 🌝 6. الردود والمنشن (المصيدة)
+        # 🌝 6. الردود والمنشن
         if not reply:
             clean_msg = normalize(msg)
             
-            # أ. الرد على المنشن (وضع المصيدة)
-            # لازم يكون المنشن مفعل في الجروب
+            # أ. تسجيل الضحية في المصيدة (فقط إذا المنشن مفعل)
             if mentionees and room_id in group_settings["mention_enabled_groups"]:
-                # نضيف الناس اللي اتعملهم منشن لقائمة المراقبة
                 if room_id not in pending_mentions: pending_mentions[room_id] = []
-                
                 new_victims = False
                 for m_id in mentionees:
-                    if m_id != user_id: # ما ينفعش يعمل منشن لنفسه
+                    if m_id != user_id:
                         pending_mentions[room_id].append(m_id)
                         new_victims = True
-                
-                # نرد بنكتة عشوائية
                 if new_victims and "on_mention" in mention_jokes:
                     reply = random.choice(mention_jokes["on_mention"])
 
