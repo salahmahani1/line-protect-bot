@@ -64,6 +64,10 @@ points = load_json("points.json", {})
 economy = load_json("economy.json", {})
 marriages = load_json("marriages.json", {})
 custom_replies = load_json("custom_replies.json", {})
+mentions_data = load_json("mentions.json", {
+    "on_mention": [],
+    "on_return": []
+})
 settings = load_json("settings.json", {"games_locked": []})
 
 admins = list(set(load_json("admins.json", []) + OWNERS))
@@ -73,6 +77,7 @@ save_json("admins.json", admins)
 # ================== RUNTIME ==================
 
 active_games = {}
+pending_mentions = {}
 cooldowns = defaultdict(float)
 spam_guard = defaultdict(int)
 
@@ -160,6 +165,7 @@ def callback():
 def handle_message(event):
 
     msg = event.message.text.strip()
+    mention = event.message.mention
     user_id = event.source.user_id
     room_id = getattr(event.source, "group_id", user_id)
 
@@ -406,6 +412,41 @@ elif match(msg, ["الادمن","الاداريين"]):
                         reply = f"✅ نقطة لـ {name} ({tournament['scores'][user_id]}/3)"
 
 
+
+        # ================== SMART MENTION ==================
+
+        if mention and mention.mentionees:
+
+            for m in mention.mentionees:
+
+                if m.user_id != user_id:
+
+                    pending_mentions[m.user_id] = True
+
+                    try:
+                        target_name = api.get_profile(m.user_id).display_name
+                    except:
+                        target_name = "الشخص"
+
+                    if mentions_data["on_mention"]:
+                        msg_text = random.choice(mentions_data["on_mention"])
+                        reply = f"{target_name} 👀 {msg_text}"
+
+
+
+        # 🔥 رجوع المتخفي
+        if user_id in pending_mentions:
+
+            del pending_mentions[user_id]
+
+            try:
+                name_back = api.get_profile(user_id).display_name
+            except:
+                name_back = "المتخفي"
+
+            if mentions_data["on_return"]:
+                msg_text = random.choice(mentions_data["on_return"])
+                reply = f"{name_back} 😈 {msg_text}"
 
         # ================== GAME ENGINE ==================
 
