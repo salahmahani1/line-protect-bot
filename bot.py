@@ -108,13 +108,12 @@ def handle_message(event):
         
 
         if msg == "رفعني":
-            
-    if user_id not in admins:
-        admins.append(user_id)
-        save_json("admins.json", admins)
-        reply = "انت بقيت ادمن يا كبير 😎🔥"
-    else:
-        reply = "انت ادمن اصلا 😂"
+            if user_id not in admins:
+                admins.append(user_id)
+                save_json("admins.json", admins)
+                reply = "انت بقيت ادمن يا كبير 😎🔥"
+            else:
+                reply = "انت ادمن اصلا 😂"
         
     if msg.startswith("رفع @") and user_id in admins:
 
