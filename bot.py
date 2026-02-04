@@ -147,16 +147,15 @@ if msg == "ai تشغيل" and user_id in admins:
     else:
         reply = "الذكاء شغال بالفعل 😂"
         
-if msg == "ايقاف ai" and user_id in admins:
+if msg == "ai ايقاف" and user_id in admins:
 
     if group_id in ai_groups["groups"]:
         ai_groups["groups"].remove(group_id)
         save_json("ai_groups.json", ai_groups)
-        reply = "تم إيقاف الذكاء 😴"
+        reply = "تم ايقاف الذكاء في الجروب 👍"
 
     else:
-        reply = "هو أصلا مقفول 😂"
-
+        reply = "الذكاء مش شغال اصلاً 😂"
         # ================= ECONOMY =================
 
         if msg == "فلوسي":
