@@ -284,7 +284,7 @@ def handle_message(event):
             try:
                 pass
             except Exception as e:
-        print("CRASH BLOCKED:", e)
+                print("CRASH BLOCKED:", e)
     
 
     if reply:
