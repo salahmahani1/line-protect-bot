@@ -16,7 +16,11 @@ from linebot.v3.webhook import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.exceptions import InvalidSignatureError
 
+from openai import OpenAI
 
+
+import os
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # ================= CONFIG =================
 
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
@@ -32,7 +36,32 @@ app = Flask(__name__)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
+def ai_reply(message):
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """
+انت شاب مصري دمك خفيف.
+بترد بطريقة طبيعية جداً مش robotic.
+ردودك قصيرة (سطر او سطرين).
+متقولش انك AI.
+اهزر بس من غير ما تبقى بضان.
+لو حد شتمك رد بثقة مش بعصبية.
+"""
+                },
+                {"role": "user", "content": message}
+            ],
+            max_tokens=120
+        )
 
+        return response.choices[0].message.content
+
+    except Exception as e:
+        print("AI ERROR:", e)
+        return "مخي هنج ثانية 😂 جرب تاني"
 # ================= SAFE JSON =================
 
 def load_json(file, default):
