@@ -59,7 +59,21 @@ save_json("admins.json", admins)
 points = load_json("points.json", {})
 economy = load_json("economy.json", {})
 mentions = load_json("mentions.json", {"waiting": {}})
+# ================= GAME DATA =================
 
+words = load_json("words.json", ["قطة","كلب","تفاحة","موز"])
+questions = load_json("questions.json", [{"q":"عاصمة مصر؟","a":"القاهرة"}])
+tf_questions = load_json("truefalse.json", [{"q":"الأرض مسطحة؟","a":"غلط"}])
+
+active_games = {}
+
+tournament = {
+    "open": False,
+    "players": [],
+    "current": None,
+    "scores": {},
+    "answer": None
+}
 
 # ================= ANTI SPAM =================
 
@@ -113,9 +127,117 @@ def handle_message(event):
             name = "لاعب"
 
         reply = None
+# ================= GAMES =================
 
-        try:
+if not reply:
 
+    room_id = getattr(event.source, "group_id", user_id)
+
+    # الإجابة على لعبة شغالة
+    if room_id in active_games:
+
+        game = active_games[room_id]
+
+        if msg.lower() == game["answer"].lower():
+
+            pts = random.randint(10,25)
+            points[user_id] = points.get(user_id,0) + pts
+            save_json("points.json", points)
+
+            reply = f"🔥 {name} كسب {pts} نقطة!"
+
+            del active_games[room_id]
+
+    # بدء لعبة جديدة
+    elif msg == "سؤال":
+
+        q = random.choice(questions)
+
+        active_games[room_id] = {
+            "answer": q["a"]
+        }
+
+        reply = f"🧠 {q['q']}"
+
+    elif msg == "رتب":
+
+        w = random.choice(words)
+        shuffled = ''.join(random.sample(w,len(w)))
+
+        active_games[room_id] = {
+            "answer": w
+        }
+
+        reply = f"رتب الكلمة:\n{shuffled}"
+
+    elif msg in ["صح غلط","صح او غلط"]:
+
+        q = random.choice(tf_questions)
+
+        active_games[room_id] = {
+            "answer": q["a"]
+        }
+
+        reply = q["q"]
+# ================= TOURNAMENT =================
+
+if msg == "فتح بطولة" and user_id in admins:
+    tournament["open"] = True
+    tournament["players"] = []
+    reply = "🔥 تم فتح التسجيل للبطولة!"
+
+elif msg == "تسجيل" and tournament["open"]:
+
+    if user_id not in tournament["players"]:
+        tournament["players"].append(user_id)
+        reply = "✅ سجلت!"
+
+elif msg == "ابدأ البطولة" and user_id in admins:
+
+    if len(tournament["players"]) < 2:
+        reply = "لا يوجد لاعبين كفاية"
+    else:
+
+        p1, p2 = random.sample(tournament["players"],2)
+
+        q = random.choice(questions)
+
+        tournament["current"] = [p1,p2]
+        tournament["scores"] = {p1:0,p2:0}
+        tournament["answer"] = q["a"]
+
+        reply = f"🔥 مواجهة بدأت!\nالسؤال:\n{q['q']}"
+
+elif tournament["current"]:
+
+    if user_id in tournament["current"]:
+
+        if msg.lower() == tournament["answer"].lower():
+
+            tournament["scores"][user_id]+=1
+
+            if tournament["scores"][user_id] == 3:
+
+                points[user_id] = points.get(user_id,0)+1000
+                save_json("points.json",points)
+
+                reply = f"🏆 {name} كسب البطولة و اخد 1000 نقطة!"
+
+                tournament["current"] = None
+                tournament["open"] = False
+
+            else:
+
+                q = random.choice(questions)
+                tournament["answer"] = q["a"]
+
+                reply = f"صح!\nالسؤال الجديد:\n{q['q']}"
+
+elif msg == "الغاء البطولة" and user_id in admins:
+
+    tournament["open"] = False
+    tournament["current"] = None
+    reply = "تم الغاء البطولة"
             # ================= OWNERS / ADMINS =================
 
             if msg == "الادمن":
