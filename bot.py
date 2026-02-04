@@ -16,10 +16,9 @@ from linebot.v3.webhook import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.exceptions import InvalidSignatureError
 
+import os
 from openai import OpenAI
 
-
-import os
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
