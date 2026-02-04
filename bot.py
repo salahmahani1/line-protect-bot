@@ -301,7 +301,7 @@ def handle_message(event):
 
             reply = "هبلغه لما يرجع 😏"
 
-        if user_id in mentions["waiting"]:
+        if user_id in mentions.get("waiting", {}):
             del mentions["waiting"][user_id]
             save_json("mentions.json", mentions)
 
