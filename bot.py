@@ -105,6 +105,7 @@ def handle_message(event):
             group_id = event.source.group_id
             AI_ON = group_id in ai_groups["groups"]
         # ================= ADMIN =================
+        
 
         if msg == "رفعني":
             if user_id not in admins:
@@ -115,7 +116,7 @@ def handle_message(event):
         if msg == "الادمن":
             reply = f"عدد الادمنز: {len(admins)}"
             
-        if msg == "تشغيل ai" and user_id in OWNERS:
+        if msg == "تشغيل ai" and user_id in admins:
 
     if group_id not in ai_groups["groups"]:
         ai_groups["groups"].append(group_id)
@@ -125,7 +126,7 @@ def handle_message(event):
     else:
         reply = "هو شغال بالفعل 😏"
         
-        if msg == "ايقاف ai" and user_id in OWNERS:
+        if msg == "ايقاف ai" and user_id in admins:
 
     if group_id in ai_groups["groups"]:
         ai_groups["groups"].remove(group_id)
