@@ -282,6 +282,7 @@ def handle_message(event):
                 "صح النوم 😏"
             ])
             try:
+                pass
             except Exception as e:
         print("CRASH BLOCKED:", e)
     
