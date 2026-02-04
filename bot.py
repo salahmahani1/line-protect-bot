@@ -23,7 +23,7 @@ GEMINI_API_KEY = "AIzaSyBRLGECNo6M4Y-1B-uWcovx-Leh_aC2mos"
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-model = genai.GenerativeModel("gemini-1.5-flash")
+model = genai.GenerativeModel("gemini-pro")
 
 app = Flask(__name__)
 
