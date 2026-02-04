@@ -108,10 +108,24 @@ def handle_message(event):
         
 
         if msg == "رفعني":
-            if user_id not in admins:
-                admins.append(user_id)
+            
+    if user_id not in admins:
+        admins.append(user_id)
+        save_json("admins.json", admins)
+        reply = "انت بقيت ادمن يا كبير 😎🔥"
+    else:
+        reply = "انت ادمن اصلا 😂"
+        
+        if msg.startswith("رفع @") and user_id in admins:
+
+    if event.message.mention:
+        for m in event.message.mention.mentionees:
+            new_admin = m.user_id
+
+            if new_admin not in admins:
+                admins.append(new_admin)
                 save_json("admins.json", admins)
-                reply = "بقيت ادمن اهو 😎"
+                reply = "تم رفع ادمن جديد 🚀"
 
         if msg == "الادمن":
             reply = f"عدد الادمنز: {len(admins)}"
