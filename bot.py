@@ -88,7 +88,6 @@ def callback():
     return 'OK'
 
 # ================= MESSAGE =================
-
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
 
@@ -100,12 +99,14 @@ def handle_message(event):
 
         reply = None
         group_id = None
-        
+        AI_ON = False
+
+        # ===== group detect =====
         if event.source.type == "group":
             group_id = event.source.group_id
-            AI_ON = group_id in ai_groups["groups"]
+            AI_ON = group_id in ai_groups.get("groups", [])
+
         # ================= ADMIN =================
-        
 
         if msg == "رفعني":
             if user_id not in admins:
@@ -114,55 +115,52 @@ def handle_message(event):
                 reply = "انت بقيت ادمن يا كبير 😎🔥"
             else:
                 reply = "انت ادمن اصلا 😂"
-        
-# رفع ادمن بالمنشن
-if msg.startswith("رفع @") and user_id in admins:
 
-    if event.message.mention:
+        elif msg.startswith("رفع @") and user_id in admins:
 
-        for m in event.message.mention.mentionees:
-            new_admin = m.user_id
+            if event.message.mention:
+                for m in event.message.mention.mentionees:
+                    new_admin = m.user_id
 
-            if new_admin not in admins:
-                admins.append(new_admin)
-                save_json("admins.json", admins)
-                reply = "تم رفع ادمن جديد 🚀"
-
+                    if new_admin not in admins:
+                        admins.append(new_admin)
+                        save_json("admins.json", admins)
+                        reply = "تم رفع ادمن جديد 🚀"
+                    else:
+                        reply = "هو ادمن بالفعل 😂"
             else:
-                reply = "هو ادمن بالفعل 😂"
+                reply = "منشن الشخص الأول 🙂"
 
-    else:
-        reply = "منشن الشخص الأول 🙂"
-
-        if msg == "الادمن":
+        elif msg == "الادمن":
             reply = f"عدد الادمنز: {len(admins)}"
-            
-if msg == "ai تشغيل" and user_id in admins:
 
-    if group_id not in ai_groups["groups"]:
-        ai_groups["groups"].append(group_id)
-        save_json("ai_groups.json", ai_groups)
-        reply = "تم تشغيل الذكاء هنا 🧠🔥"
+        # ================= AI CONTROL =================
 
-    else:
-        reply = "الذكاء شغال بالفعل 😂"
-        
-if msg == "ai ايقاف" and user_id in admins:
+        elif msg == "ai تشغيل" and user_id in admins:
 
-    if group_id in ai_groups["groups"]:
-        ai_groups["groups"].remove(group_id)
-        save_json("ai_groups.json", ai_groups)
-        reply = "تم ايقاف الذكاء في الجروب 👍"
+            if group_id and group_id not in ai_groups["groups"]:
+                ai_groups["groups"].append(group_id)
+                save_json("ai_groups.json", ai_groups)
+                reply = "تم تشغيل الذكاء هنا 🧠🔥"
+            else:
+                reply = "الذكاء شغال بالفعل 😂"
 
-    else:
-        reply = "الذكاء مش شغال اصلاً 😂"
+        elif msg == "ai ايقاف" and user_id in admins:
+
+            if group_id in ai_groups["groups"]:
+                ai_groups["groups"].remove(group_id)
+                save_json("ai_groups.json", ai_groups)
+                reply = "تم ايقاف الذكاء 👍"
+            else:
+                reply = "الذكاء مش شغال 😂"
+
         # ================= ECONOMY =================
 
-        if msg == "فلوسي":
+        elif msg == "فلوسي":
             coins = economy.get(user_id, 0)
             reply = f"معاك {coins} كوين 💰"
 
-        if msg == "راتب":
+        elif msg == "راتب":
             last = economy.get(f"time_{user_id}", 0)
 
             if time.time() - last > 86400:
@@ -170,14 +168,13 @@ if msg == "ai ايقاف" and user_id in admins:
                 economy[f"time_{user_id}"] = time.time()
 
                 save_json("economy.json", economy)
-
                 reply = "قبضت 100 كوين 💸"
             else:
                 reply = "استنى بكرة 😏"
 
         # ================= SMART MENTION =================
 
-        if event.message.mention:
+        elif event.message.mention:
             try:
                 target = event.message.mention.mentionees[0].user_id
                 mentions["waiting"][target] = True
@@ -187,23 +184,23 @@ if msg == "ai ايقاف" and user_id in admins:
             except:
                 pass
 
-        if user_id in mentions.get("waiting", {}):
+        elif user_id in mentions.get("waiting", {}):
             del mentions["waiting"][user_id]
             save_json("mentions.json", mentions)
 
             reply = random.choice([
                 "نورت يا غايب 👀",
-                "تعالى هنا كنت بتستخبى فين 😏",
+                "تعالى هنا كنت فين 😏",
                 "الناس كانت بتدور عليك 😂"
             ])
 
         # ================= AI =================
 
-        trigger_words = ["بوت", "يا بوت", "@"]
+        trigger_words = ["يا بوت", "بوت", "يا طراد", "طراد"]
 
         if not reply and AI_ON and any(word in msg for word in trigger_words):
             reply = ai_reply(msg)
-        # fallback
+
         if not reply:
             return
 
