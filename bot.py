@@ -40,7 +40,7 @@ def load_json(file, default):
     except:
         pass
     return default
-
+ai_groups = load_json("ai_groups.json", {"groups": []})
 
 def save_json(file, data):
     with open(file, "w", encoding="utf-8") as f:
@@ -100,6 +100,12 @@ def handle_message(event):
 
         reply = None
 
+group_id = None
+
+if event.source.type == "group":
+    group_id = event.source.group_id
+
+AI_ON = group_id in ai_groups["groups"]
         # ================= ADMIN =================
 
         if msg == "رفعني":
@@ -110,6 +116,26 @@ def handle_message(event):
 
         if msg == "الادمن":
             reply = f"عدد الادمنز: {len(admins)}"
+            
+        if msg == "تشغيل ai" and user_id in OWNERS:
+
+    if group_id not in ai_groups["groups"]:
+        ai_groups["groups"].append(group_id)
+        save_json("ai_groups.json", ai_groups)
+        reply = "تم تشغيل الذكاء الاصطناعي هنا 🧠🔥"
+
+    else:
+        reply = "هو شغال بالفعل 😏"
+        
+        if msg == "ايقاف ai" and user_id in OWNERS:
+
+    if group_id in ai_groups["groups"]:
+        ai_groups["groups"].remove(group_id)
+        save_json("ai_groups.json", ai_groups)
+        reply = "تم إيقاف الذكاء 😴"
+
+    else:
+        reply = "هو أصلا مقفول 😂"
 
         # ================= ECONOMY =================
 
@@ -156,9 +182,8 @@ def handle_message(event):
 
         trigger_words = ["بوت", "يا بوت", "@"]
 
-        if not reply and any(word in msg for word in trigger_words):
+        if not reply and AI_ON and any(word in msg for word in trigger_words):
             reply = ai_reply(msg)
-
         # fallback
         if not reply:
             return
