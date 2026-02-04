@@ -137,15 +137,15 @@ if msg.startswith("رفع @") and user_id in admins:
         if msg == "الادمن":
             reply = f"عدد الادمنز: {len(admins)}"
             
-        if msg == "تشغيل ai" and user_id in admins:
+if msg == "ai تشغيل" and user_id in admins:
 
     if group_id not in ai_groups["groups"]:
         ai_groups["groups"].append(group_id)
         save_json("ai_groups.json", ai_groups)
-        reply = "تم تشغيل الذكاء الاصطناعي هنا 🧠🔥"
+        reply = "تم تشغيل الذكاء هنا 🧠🔥"
 
     else:
-        reply = "هو شغال بالفعل 😏"
+        reply = "الذكاء شغال بالفعل 😂"
         
         if msg == "ايقاف ai" and user_id in admins:
 
