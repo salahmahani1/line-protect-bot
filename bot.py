@@ -7,7 +7,7 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.exceptions import InvalidSignatureError
 
-from openai import OpenAI
+import google.generativeai as genai
 
 import os
 import json
@@ -19,9 +19,11 @@ import time
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = "AIzaSyBRLGECNo6M4Y-1B-uWcovx-Leh_aC2mos"
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
+
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 app = Flask(__name__)
 
@@ -54,31 +56,23 @@ mentions = load_json("mentions.json", {"waiting": {}})
 
 def ai_reply(message):
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": """
-انت شاب مصري هزار جدا.
+        response = model.generate_content(
+            f"""
+انت شاب مصري هزار ودمك خفيف.
 ردودك قصيرة.
-دمك خفيف.
-لو حد يهزر هزار معاه.
-لو حد يستفزك رد بسخرية خفيفة.
+بتفهم الهزار.
 ممنوع تقول انك AI.
+
+الرسالة:
+{message}
 """
-                },
-                {"role": "user", "content": message}
-            ],
-            max_tokens=120
         )
 
-        return response.choices[0].message.content
+        return response.text
 
     except Exception as e:
         print("AI ERROR:", e)
-        return "حاسس ان مخي فاصل ثانية 😂"
-
+        return "حاسس ان مخي فصل ثانية 😂"
 # ================= ROUTE =================
 
 @app.route("/callback", methods=['POST'])
