@@ -294,6 +294,8 @@ def handle_message(event):
 
         # ================= SMART MENTION =================
 
+        mentions.setdefault("waiting", {})
+        
         if event.message.mention:
             target = event.message.mention.mentionees[0].user_id
             mentions["waiting"][target] = True
@@ -301,7 +303,7 @@ def handle_message(event):
 
             reply = "هبلغه لما يرجع 😏"
 
-        if user_id in mentions.get("waiting", {}):
+        if user_id in mentions["waiting"]:
             del mentions["waiting"][user_id]
             save_json("mentions.json", mentions)
 
