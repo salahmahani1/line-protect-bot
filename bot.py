@@ -28,7 +28,6 @@ OWNERS = [
     "U3617621ee527f90ad2ee0231c8bf973f",
 ]
 
-
 app = Flask(__name__)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
@@ -59,11 +58,12 @@ save_json("admins.json", admins)
 points = load_json("points.json", {})
 economy = load_json("economy.json", {})
 mentions = load_json("mentions.json", {"waiting": {}})
+
 # ================= GAME DATA =================
 
-words = load_json("words.json", ["قطة","كلب","تفاحة","موز"])
-questions = load_json("questions.json", [{"q":"عاصمة مصر؟","a":"القاهرة"}])
-tf_questions = load_json("truefalse.json", [{"q":"الأرض مسطحة؟","a":"غلط"}])
+words = load_json("words.json", ["قطة", "كلب", "تفاحة", "موز"])
+questions = load_json("questions.json", [{"q": "عاصمة مصر؟", "a": "القاهرة"}])
+tf_questions = load_json("truefalse.json", [{"q": "الأرض مسطحة؟", "a": "غلط"}])
 
 active_games = {}
 
@@ -111,7 +111,6 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-
     user_id = event.source.user_id
     msg = event.message.text.strip()
 
@@ -127,188 +126,172 @@ def handle_message(event):
             name = "لاعب"
 
         reply = None
-# ================= GAMES =================
 
-if not reply:
+        # ================= GAMES =================
 
-    room_id = getattr(event.source, "group_id", user_id)
+        if not reply:
+            room_id = getattr(event.source, "group_id", user_id)
 
-    # الإجابة على لعبة شغالة
-    if room_id in active_games:
+            # الإجابة على لعبة شغالة
+            if room_id in active_games:
+                game = active_games[room_id]
 
-        game = active_games[room_id]
+                if msg.lower() == game["answer"].lower():
+                    pts = random.randint(10, 25)
+                    points[user_id] = points.get(user_id, 0) + pts
+                    save_json("points.json", points)
 
-        if msg.lower() == game["answer"].lower():
+                    reply = f"🔥 {name} كسب {pts} نقطة!"
+                    del active_games[room_id]
 
-            pts = random.randint(10,25)
-            points[user_id] = points.get(user_id,0) + pts
-            save_json("points.json", points)
+            # بدء لعبة جديدة
+            elif msg == "سؤال":
+                q = random.choice(questions)
 
-            reply = f"🔥 {name} كسب {pts} نقطة!"
+                active_games[room_id] = {
+                    "answer": q["a"]
+                }
 
-            del active_games[room_id]
+                reply = f"🧠 {q['q']}"
 
-    # بدء لعبة جديدة
-    elif msg == "سؤال":
+            elif msg == "رتب":
+                w = random.choice(words)
+                shuffled = ''.join(random.sample(w, len(w)))
 
-        q = random.choice(questions)
+                active_games[room_id] = {
+                    "answer": w
+                }
 
-        active_games[room_id] = {
-            "answer": q["a"]
-        }
+                reply = f"رتب الكلمة:\n{shuffled}"
 
-        reply = f"🧠 {q['q']}"
+            elif msg in ["صح غلط", "صح او غلط"]:
+                q = random.choice(tf_questions)
 
-    elif msg == "رتب":
+                active_games[room_id] = {
+                    "answer": q["a"]
+                }
 
-        w = random.choice(words)
-        shuffled = ''.join(random.sample(w,len(w)))
+                reply = q["q"]
 
-        active_games[room_id] = {
-            "answer": w
-        }
+        # ================= TOURNAMENT =================
 
-        reply = f"رتب الكلمة:\n{shuffled}"
+        if msg == "فتح بطولة" and user_id in admins:
+            tournament["open"] = True
+            tournament["players"] = []
+            reply = "🔥 تم فتح التسجيل للبطولة!"
 
-    elif msg in ["صح غلط","صح او غلط"]:
+        elif msg == "تسجيل" and tournament["open"]:
+            if user_id not in tournament["players"]:
+                tournament["players"].append(user_id)
+                reply = "✅ سجلت!"
 
-        q = random.choice(tf_questions)
-
-        active_games[room_id] = {
-            "answer": q["a"]
-        }
-
-        reply = q["q"]
-# ================= TOURNAMENT =================
-
-if msg == "فتح بطولة" and user_id in admins:
-    tournament["open"] = True
-    tournament["players"] = []
-    reply = "🔥 تم فتح التسجيل للبطولة!"
-
-elif msg == "تسجيل" and tournament["open"]:
-
-    if user_id not in tournament["players"]:
-        tournament["players"].append(user_id)
-        reply = "✅ سجلت!"
-
-elif msg == "ابدأ البطولة" and user_id in admins:
-
-    if len(tournament["players"]) < 2:
-        reply = "لا يوجد لاعبين كفاية"
-    else:
-
-        p1, p2 = random.sample(tournament["players"],2)
-
-        q = random.choice(questions)
-
-        tournament["current"] = [p1,p2]
-        tournament["scores"] = {p1:0,p2:0}
-        tournament["answer"] = q["a"]
-
-        reply = f"🔥 مواجهة بدأت!\nالسؤال:\n{q['q']}"
-
-elif tournament["current"]:
-
-    if user_id in tournament["current"]:
-
-        if msg.lower() == tournament["answer"].lower():
-
-            tournament["scores"][user_id]+=1
-
-            if tournament["scores"][user_id] == 3:
-
-                points[user_id] = points.get(user_id,0)+1000
-                save_json("points.json",points)
-
-                reply = f"🏆 {name} كسب البطولة و اخد 1000 نقطة!"
-
-                tournament["current"] = None
-                tournament["open"] = False
-
+        elif msg == "ابدأ البطولة" and user_id in admins:
+            if len(tournament["players"]) < 2:
+                reply = "لا يوجد لاعبين كفاية"
             else:
+                p1, p2 = random.sample(tournament["players"], 2)
 
                 q = random.choice(questions)
+
+                tournament["current"] = [p1, p2]
+                tournament["scores"] = {p1: 0, p2: 0}
                 tournament["answer"] = q["a"]
 
-                reply = f"صح!\nالسؤال الجديد:\n{q['q']}"
+                reply = f"🔥 مواجهة بدأت!\nالسؤال:\n{q['q']}"
 
-elif msg == "الغاء البطولة" and user_id in admins:
+        elif tournament["current"]:
+            if user_id in tournament["current"]:
+                if msg.lower() == tournament["answer"].lower():
+                    tournament["scores"][user_id] += 1
 
-    tournament["open"] = False
-    tournament["current"] = None
-    reply = "تم الغاء البطولة"
-            # ================= OWNERS / ADMINS =================
+                    if tournament["scores"][user_id] == 3:
+                        points[user_id] = points.get(user_id, 0) + 1000
+                        save_json("points.json", points)
 
-            if msg == "الادمن":
-                reply = f"عدد الادمنز: {len(admins)}"
+                        reply = f"🏆 {name} كسب البطولة و اخد 1000 نقطة!"
+                        tournament["current"] = None
+                        tournament["open"] = False
 
-            if msg.startswith("رفع") and user_id in OWNERS:
-                if event.message.mention:
-                    target = event.message.mention.mentionees[0].user_id
-                    if target not in admins:
-                        admins.append(target)
-                        save_json("admins.json", admins)
-                        reply = "✅ تم رفعه ادمن"
+                    else:
+                        q = random.choice(questions)
+                        tournament["answer"] = q["a"]
 
-            if msg.startswith("تنزيل") and user_id in OWNERS:
-                if event.message.mention:
-                    target = event.message.mention.mentionees[0].user_id
-                    if target in admins:
-                        admins.remove(target)
-                        save_json("admins.json", admins)
-                        reply = "✅ تم تنزيل الادمن"
+                        reply = f"صح!\nالسؤال الجديد:\n{q['q']}"
 
-            # ================= ECONOMY =================
+        elif msg == "الغاء البطولة" and user_id in admins:
+            tournament["open"] = False
+            tournament["current"] = None
+            reply = "تم الغاء البطولة"
 
-            if msg == "راتب":
-                last = economy.get(user_id, 0)
+        # ================= OWNERS / ADMINS =================
 
-                if time.time() - last > 86400:
-                    points[user_id] = points.get(user_id, 0) + 500
-                    economy[user_id] = time.time()
+        if msg == "الادمن":
+            reply = f"عدد الادمنز: {len(admins)}"
 
-                    save_json("points.json", points)
-                    save_json("economy.json", economy)
-
-                    reply = "💰 اخدت 500 نقطة"
-                else:
-                    reply = "استنى بكرة 😄"
-
-            if msg == "فلوسي":
-                reply = f"معاك {points.get(user_id,0)} نقطة"
-
-            # ================= SMART MENTION =================
-
+        if msg.startswith("رفع") and user_id in OWNERS:
             if event.message.mention:
-
                 target = event.message.mention.mentionees[0].user_id
-                mentions["waiting"][target] = True
-                save_json("mentions.json", mentions)
+                if target not in admins:
+                    admins.append(target)
+                    save_json("admins.json", admins)
+                    reply = "✅ تم رفعه ادمن"
 
-                reply = "هبلغه لما يرجع 😏"
+        if msg.startswith("تنزيل") and user_id in OWNERS:
+            if event.message.mention:
+                target = event.message.mention.mentionees[0].user_id
+                if target in admins:
+                    admins.remove(target)
+                    save_json("admins.json", admins)
+                    reply = "✅ تم تنزيل الادمن"
 
-            if user_id in mentions["waiting"]:
-                del mentions["waiting"][user_id]
-                save_json("mentions.json", mentions)
+        # ================= ECONOMY =================
 
-                reply = random.choice([
-                    "👀 حد كان بيدور عليك",
-                    "تعالى يا نجم كانوا بيسألوا عليك 😂",
-                    "صح النوم 😏"
-                ])
+        if msg == "راتب":
+            last = economy.get(user_id, 0)
 
-        except Exception as e:
-            print("CRASH BLOCKED:", e)
+            if time.time() - last > 86400:
+                points[user_id] = points.get(user_id, 0) + 500
+                economy[user_id] = time.time()
 
+                save_json("points.json", points)
+                save_json("economy.json", economy)
 
-        if reply:
-            api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply)]
-                )
+                reply = "💰 اخدت 500 نقطة"
+            else:
+                reply = "استنى بكرة 😄"
+
+        if msg == "فلوسي":
+            reply = f"معاك {points.get(user_id, 0)} نقطة"
+
+        # ================= SMART MENTION =================
+
+        if event.message.mention:
+            target = event.message.mention.mentionees[0].user_id
+            mentions["waiting"][target] = True
+            save_json("mentions.json", mentions)
+
+            reply = "هبلغه لما يرجع 😏"
+
+        if user_id in mentions["waiting"]:
+            del mentions["waiting"][user_id]
+            save_json("mentions.json", mentions)
+
+            reply = random.choice([
+                "👀 حد كان بيدور عليك",
+                "تعالى يا نجم كانوا بيسألوا عليك 😂",
+                "صح النوم 😏"
+            ])
+
+    except Exception as e:
+        print("CRASH BLOCKED:", e)
+
+    if reply:
+        api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=reply)]
             )
+        )
 
 
 if __name__ == "__main__":
