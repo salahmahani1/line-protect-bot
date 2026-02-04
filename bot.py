@@ -116,8 +116,7 @@ def handle_message(event):
                 reply = "انت ادمن اصلا 😂"
         
     if msg.startswith("رفع @") and user_id in admins:
-
-    if event.message.mention:
+        if event.message.mention:
         for m in event.message.mention.mentionees:
             new_admin = m.user_id
 
