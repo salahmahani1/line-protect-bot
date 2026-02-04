@@ -147,7 +147,7 @@ if msg == "ai تشغيل" and user_id in admins:
     else:
         reply = "الذكاء شغال بالفعل 😂"
         
-        if msg == "ايقاف ai" and user_id in admins:
+if msg == "ايقاف ai" and user_id in admins:
 
     if group_id in ai_groups["groups"]:
         ai_groups["groups"].remove(group_id)
