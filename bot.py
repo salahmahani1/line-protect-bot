@@ -99,13 +99,11 @@ def handle_message(event):
         user_id = event.source.user_id
 
         reply = None
-
-group_id = None
-
-if event.source.type == "group":
-    group_id = event.source.group_id
-
-AI_ON = group_id in ai_groups["groups"]
+        group_id = None
+        
+        if event.source.type == "group":
+            group_id = event.source.group_id
+            AI_ON = group_id in ai_groups["groups"]
         # ================= ADMIN =================
 
         if msg == "رفعني":
