@@ -281,9 +281,10 @@ def handle_message(event):
                 "تعالى يا نجم كانوا بيسألوا عليك 😂",
                 "صح النوم 😏"
             ])
-
-    except Exception as e:
+            try:
+            except Exception as e:
         print("CRASH BLOCKED:", e)
+    
 
     if reply:
         api.reply_message(
