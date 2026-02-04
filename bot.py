@@ -259,8 +259,8 @@ def handle_message(event):
         # محاولة جلب اسم اللاعب
     try:
        name = api.get_profile(user_id).display_name
-except:
-    name = "لاعب"
+    except:
+        name = "لاعب"
         reply = None
 
 
