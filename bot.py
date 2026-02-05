@@ -95,9 +95,11 @@ def handle_message(event):
 
 # ================= MENTION =================
 
-    elif "@bot" in msg:
+    elif "طراد" in msg:
         reply = random.choice(mentions["on_mention"])
-
+    elif event.message.mention:
+         mentions_data = load_json("mentions.json", {"on_mention":["نعم؟"]})
+        reply = random.choice(mentions_data["on_mention"])
 
 # ================= GAMES =================
 
@@ -143,13 +145,15 @@ def handle_message(event):
         if msg == ans or similar(msg,ans):
             active_games.pop(room_id)
             reply = "🔥 إجابة صحيحة!"
-
-
+            if random.random() < 0.5:
+                reply = random.choice(mentions_data["on_mention"])
+            if event.source.user_id == configuration.access_token:
+                return
 # ================= AUTO REPLY =================
 
-    if reply is None:
-        reply = "اكتب ( سوال ) وابدأ اللعب 😎"
-
+    if event.message.mention and room_id not in active_games:
+        mentions_data = load_json("mentions.json", {"on_mention":["نعم؟"]})
+        reply = random.choice(mentions_data["on_mention"])
 
     line_bot_api.reply_message(
         event.reply_token,
