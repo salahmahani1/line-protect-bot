@@ -1,3 +1,12 @@
+
+# ================= إعدادات =================
+CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
+CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
+OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d"
+
+    app.run(host="0.0.0.0", port=
+    
+
 from flask import Flask, request, abort
 import json, random, os, re
 from difflib import SequenceMatcher
@@ -11,218 +20,241 @@ from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.exceptions import InvalidSignatureError
 
 
-# ================= إعدادات =================
 CHANNEL_ACCESS_TOKEN = "/oJXvxwxxAnMPLH2/6LnLbO+7zohIRl4DBIhAKUUUx+T0zPHQBjPapfdCyHiL4CZDnzgMvVWaGLD2QYQmUI3u8F2Q1+ODUjMODVN0RMrv3atalk/5BoeivWmPpiY/+tNBe7KhXMUx+Rts0Fz1J6NDwdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "b64fb5dc359d81c85cf875c1e617663f"
 OWNER_ID = "U9ecd575f8df0e62798f4c8ecc9738d5d"
-
-
-PREFIX = "."
 
 
 app = Flask(__name__)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-
-# ================= ملفات =================
+# ===== FILES =====
 def load_json(file, default):
-    try:
-        if os.path.exists(file):
-            with open(file, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except:
-        pass
+    if os.path.exists(file):
+        with open(file,"r",encoding="utf-8") as f:
+            return json.load(f)
     return default
 
+def save_json(file,data):
+    with open(file,"w",encoding="utf-8") as f:
+        json.dump(data,f,ensure_ascii=False)
 
-def save_json(file, data):
-    with open(file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False)
+questions = load_json("questions.json",[{"q":"عاصمة مصر؟","a":"القاهرة"}])
+words = load_json("words.json",["تفاحة"])
+tf = load_json("truefalse.json",[{"q":"النار باردة","a":"غلط"}])
+race = load_json("race.json",["سبحان الله"])
 
-
-questions = load_json("questions.json", [{"q":"عاصمة مصر؟","a":"القاهرة"}])
-words = load_json("words.json", ["تفاحة"])
-race_data = load_json("race.json", ["سبحان الله"])
-tf_data = load_json("truefalse.json", [{"q":"النار باردة","a":"غلط"}])
-points = load_json("points.json", {})
-admins = load_json("admins.json", [OWNER_ID])
-
+points = load_json("points.json",{})
+admins = load_json("admins.json",[OWNER_ID])
+settings = load_json("settings.json",{"mention":[]})
 
 active_games = {}
 GAMES_ENABLED = True
 
+tournament = {"state":"OFF","players":[],"scores":{}}
 
-# ================= ذكاء عربي =================
+# ===== SMART NORMALIZE =====
 def normalize(text):
-    text = str(text).lower().strip()
+    text=str(text).lower().strip()
 
-    # توحيد الحروف
-    replacements = {
-        "أ":"ا",
-        "إ":"ا",
-        "آ":"ا",
-        "ؤ":"و",
-        "ئ":"ي",
-        "ة":"ه",
-        "ى":"ي"
+    rep={
+        "أ":"ا","إ":"ا","آ":"ا",
+        "ة":"ه","ى":"ي",
+        "ؤ":"و","ئ":"ي"
     }
 
-    for k,v in replacements.items():
-        text = text.replace(k,v)
+    for k,v in rep.items():
+        text=text.replace(k,v)
 
-    # حذف التشكيل
-    text = re.sub(r'[\u0617-\u061A\u064B-\u0652]', '', text)
+    text=re.sub(r'[\u0617-\u061A\u064B-\u0652]', '', text)
+    text=re.sub(r'[^\w\s.]','',text)
+    text=re.sub(r'(?<=\w)\s+(?=\w)','',text)
 
-    # حذف الرموز
-    text = re.sub(r'[^\w\s.]', '', text)
+    if text.startswith("ال") and len(text)>4:
+        text=text[2:]
 
-    # حذف المسافات المكررة
-    text = " ".join(text.split())
-    
-    if text.startswith("ال") and len(text) > 4:
-        text = text[2:]
-    
     return text
 
 
-def is_correct(user, answer):
-    u = normalize(user)
-    a = normalize(answer)
-
-    if u == a:
-        return True
-
-    if SequenceMatcher(None, u, a).ratio() > 0.75:
-        return True
-
-    return False
+def similar(a,b):
+    return SequenceMatcher(None,a,b).ratio()>0.65
 
 
-def is_admin(user_id):
-    return user_id in admins
+def is_admin(user):
+    return user in admins
+
+def is_owner(user):
+    return user == OWNER_ID
 
 
-# ================= سيرفر =================
-@app.route("/", methods=['GET'])
+# ===== SERVER =====
+@app.route("/",methods=['GET'])
 def home():
-    return "BOT IS RUNNING 🔥"
+    return "BOT RUNNING 🔥"
 
-
-@app.route("/callback", methods=['POST'])
+@app.route("/callback",methods=['POST'])
 def callback():
-    signature = request.headers['X-Line-Signature']
-    body = request.get_data(as_text=True)
+    signature=request.headers['X-Line-Signature']
+    body=request.get_data(as_text=True)
 
     try:
-        handler.handle(body, signature)
+        handler.handle(body,signature)
     except InvalidSignatureError:
         abort(400)
 
     return 'OK'
 
 
-# ================= الرسائل =================
+# ===== BOT =====
 @handler.add(MessageEvent, message=TextMessageContent)
-def handle_message(event):
+def handle(event):
 
-    global GAMES_ENABLED
+    global GAMES_ENABLED, tournament
 
-    msg = normalize(event.message.text)
-    user_id = event.source.user_id
-    room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
+    user=event.source.user_id
+    room=getattr(event.source,'group_id',user)
 
-    is_command = msg.startswith(PREFIX)
-    cmd = normalize(msg[len(PREFIX):]) if is_command else ""
+    msg=normalize(event.message.text)
+    cmd=msg.lstrip(".")
 
     with ApiClient(configuration) as api_client:
-        api = MessagingApi(api_client)
+        api=MessagingApi(api_client)
 
-        reply = None
+        reply=None
 
-        # ================= أوامر الأدمن =================
 
-        if is_command and "قفل" in cmd and is_admin(user_id):
-            GAMES_ENABLED = False
-            active_games.pop(room_id, None)
-            reply = "🔒 تم قفل الألعاب."
+# ================= OWNER =================
+        if is_owner(user):
 
-        elif is_command and "فتح" in cmd and is_admin(user_id):
-            GAMES_ENABLED = True
-            reply = "🔓 تم فتح الألعاب."
+            if similar(cmd,"رفعادمن") and event.message.mention:
+                for m in event.message.mention.mentionees:
+                    if m.user_id not in admins:
+                        admins.append(m.user_id)
+                save_json("admins.json",admins)
+                reply="✅ تم رفع الأدمن"
 
-        elif is_command and cmd == "h":
-            reply = """🎮 الأوامر:
+            elif similar(cmd,"تنزيلادمن") and event.message.mention:
+                for m in event.message.mention.mentionees:
+                    if m.user_id in admins:
+                        admins.remove(m.user_id)
+                save_json("admins.json",admins)
+                reply="❌ تم تنزيل الأدمن"
 
-سؤال
-رتب
-سباق
-صح غلط
-توب
 
-👮‍♂️ أوامر الأدمن:
-.فتح
-.قفل
-"""
+# ================= ADMINS =================
+        if is_admin(user):
 
-        # ================= الألعاب =================
+            if similar(cmd,"قفل"):
+                GAMES_ENABLED=False
+                reply="🔒 تم قفل الألعاب"
 
+            elif similar(cmd,"فتح"):
+                GAMES_ENABLED=True
+                reply="🔓 تم فتح الألعاب"
+
+            elif similar(cmd,"حذف"):
+                if room in active_games:
+                    del active_games[room]
+                    reply="🏳️ تم حذف اللعبة"
+                else:
+                    reply="مفيش لعبة شغالة"
+
+            elif similar(cmd,"تشغيلمنشن"):
+                if room not in settings["mention"]:
+                    settings["mention"].append(room)
+                    save_json("settings.json",settings)
+                reply="✅ تم تشغيل المنشن"
+
+            elif similar(cmd,"ايقافمنشن"):
+                if room in settings["mention"]:
+                    settings["mention"].remove(room)
+                    save_json("settings.json",settings)
+                reply="❌ تم إيقاف المنشن"
+
+            elif similar(cmd,"بطوله"):
+                tournament={"state":"ON","players":[],"scores":{}}
+                reply="🏆 تم فتح التسجيل — اكتب (سجل)"
+
+            elif similar(cmd,"ابدأ") and tournament["state"]=="ON":
+                if len(tournament["players"])<2:
+                    reply="لازم لاعبين على الأقل"
+                else:
+                    tournament["state"]="PLAY"
+                    q=random.choice(questions)
+                    active_games[room]={"a":q["a"],"tour":True}
+                    reply=f"🏆 سؤال البطولة:\n{q['q']}"
+
+
+# ================= TOURNAMENT =================
+        if tournament["state"]=="ON":
+
+            if similar(cmd,"سجل"):
+                if user not in tournament["players"]:
+                    tournament["players"].append(user)
+                    tournament["scores"][user]=0
+                    reply="🔥 تم تسجيلك في البطولة"
+
+
+# ================= GAMES =================
         elif GAMES_ENABLED:
 
-            if msg == "سؤال":
-                q = random.choice(questions)
-                active_games[room_id] = {"a": q["a"], "p":2}
-                reply = f"🧠 سؤال:\n{q['q']}"
+            if room in active_games:
 
-            elif msg == "رتب":
-                w = random.choice(words)
-                mixed = "".join(random.sample(w, len(w)))
-                active_games[room_id] = {"a": w, "p":2}
-                reply = f"✏️ رتب:\n{mixed}"
+                ans=normalize(active_games[room]["a"])
 
-            elif msg == "سباق":
-                s = random.choice(race_data)
-                active_games[room_id] = {"a": s, "p":3}
-                reply = f"🏎️ اكتب بسرعة:\n{s}"
+                if similar(msg,ans):
+                    points[user]=points.get(user,0)+2
+                    save_json("points.json",points)
 
-            elif msg == "صح غلط":
-                q = random.choice(tf_data)
-                active_games[room_id] = {"a": q["a"], "p":1}
-                reply = f"🤔 {q['q']}"
+                    reply="✅ إجابة صحيحة!"
+                    del active_games[room]
 
-            elif msg == "توب":
+            else:
 
-                top = sorted(points.items(), key=lambda x: x[1], reverse=True)[:5]
+                if similar(cmd,"سوال"):
+                    q=random.choice(questions)
+                    active_games[room]={"a":q["a"]}
+                    reply=f"🧠 {q['q']}"
 
-                if top:
-                    text = "🏆 الأوائل:\n"
-                    for i,(u,s) in enumerate(top):
+                elif similar(cmd,"رتب"):
+                    w=random.choice(words)
+                    mix="".join(random.sample(w,len(w)))
+                    active_games[room]={"a":w}
+                    reply=f"✏️ رتب:\n{mix}"
+
+                elif similar(cmd,"صح"):
+                    t=random.choice(tf)
+                    active_games[room]={"a":t["a"]}
+                    reply=f"🤔 {t['q']}"
+
+                elif similar(cmd,"سباق"):
+                    s=random.choice(race)
+                    active_games[room]={"a":s}
+                    reply=f"🏎️ اكتب بسرعة:\n{s}"
+
+                elif similar(cmd,"توب"):
+                    top=sorted(points.items(), key=lambda x:x[1], reverse=True)[:5]
+
+                    text="🏆 التوب:\n"
+                    for i,(u,p) in enumerate(top):
                         try:
-                            name = api.get_profile(u).display_name
+                            name=api.get_profile(u).display_name
                         except:
-                            name = "لاعب"
-                        text += f"{i+1}. {name} ({s})\n"
+                            name="لاعب"
 
-                    reply = text
-                else:
-                    reply = "لسه مفيش نقاط!"
+                        text+=f"{i+1}- {name} ({p})\n"
 
-            # ===== التحقق من الإجابات =====
-
-            elif room_id in active_games:
-
-                if is_correct(msg, active_games[room_id]["a"]):
-
-                    p = active_games[room_id]["p"]
-                    points[user_id] = points.get(user_id,0)+p
-                    save_json("points.json", points)
-
-                    reply = f"✅ صح! +{p} نقطة"
-                    del active_games[room_id]
+                    reply=text
 
 
-        # ================= إرسال =================
+# ================= MENTION =================
+        if not reply and room in settings["mention"]:
+            if event.message.mention:
+                reply=random.choice(words)
 
+
+# ================= SEND =================
         if reply:
             api.reply_message(
                 ReplyMessageRequest(
@@ -232,6 +264,6 @@ def handle_message(event):
             )
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+if __name__=="__main__":
+    port=int(os.environ.get("PORT",5000))
+    app.run(host="0.0.0.0",port=port)
