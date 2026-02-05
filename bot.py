@@ -110,7 +110,8 @@ def handle_message(event):
     cmd = msg[1:].strip() if is_command else msg
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
-    if not is_command and room_id not in active_games and tournament["state"] != "MATCH_ACTIVE":
+    # تجاهل الكلام العادي فقط لو مش لعبة
+    if not is_command and msg not in ["سؤال", "رتب", "سباق", "صح غلط"] and room_id not in active_games:
         return
     
     mentionees = []
