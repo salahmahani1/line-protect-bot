@@ -75,13 +75,13 @@ def normalize(text):
     text = re.sub(r'[\u0617-\u061A\u064B-\u0652]', '', text)
 
     # حذف الرموز
-    text = re.sub(r'[^\w\s]', '', text)
+    text = re.sub(r'[^\w\s.]', '', text)
 
     # حذف المسافات المكررة
     text = " ".join(text.split())
     
     if text.startswith("ال") and len(text) > 4:
-    text = text[2:]
+        text = text[2:]
     
     return text
 
@@ -128,7 +128,7 @@ def handle_message(event):
 
     global GAMES_ENABLED
 
-    msg = event.message.text.strip()
+    msg = normalize(event.message.text)
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
 
