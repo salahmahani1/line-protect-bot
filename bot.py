@@ -107,11 +107,11 @@ def handle_message(event):
     
     msg = event.message.text.strip()
     is_command = msg.startswith(".")
-    cmd = msg[1:].strip() if is_command else msg
+    cmd = normalize(msg[1:].strip()) if is_command else msg
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
     # تجاهل الكلام العادي فقط لو مش لعبة
-    if not is_command and msg not in ["سوال", "رتب", "سباق", "صح غلط"] and room_id not in active_games:
+    if not is_command and msg not in ["سؤال", "رتب", "سباق", "صح غلط", "فعالية", "توب"] and room_id not in active_games:
         return
     
     mentionees = []
@@ -155,7 +155,7 @@ def handle_message(event):
             else: reply = "مقفول بالفعل."
 
         # أوامر البطولة
-        elif is_command and cmd == "بطولة" and user_id in admins:
+        elif is_command and cmd in ["بطوله", "بطولة"] and user_id in admins:
             tournament = {"state": "REGISTER", "players": [], "names": {}, "bracket": [], "winners": [], "current_match": None, "round_num": 1}
             reply = "🏆 تم فتح باب التسجيل للبطولة!\nاكتب ( سجلني ) للمشاركة 🔥"
 
@@ -249,7 +249,7 @@ def handle_message(event):
             elif msg in ["سؤال", "رتب", "سباق", "صح غلط"] and room_id in active_games:
                 reply = "⛔ فيه لعبة شغالة! كملوها أو اكتبوا 'حذف'."
 
-            elif msg == "سوال":
+            elif msg == "سؤال":
                 q = random.choice(questions)
                 active_games[room_id] = {"a": q["a"], "p": 2}
                 reply = f"🧠 سؤال: {q['q']}"
