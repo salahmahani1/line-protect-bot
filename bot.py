@@ -111,7 +111,7 @@ def handle_message(event):
     user_id = event.source.user_id
     room_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
     # تجاهل الكلام العادي فقط لو مش لعبة
-    if not is_command and msg not in ["سؤال", "رتب", "سباق", "صح غلط"] and room_id not in active_games:
+    if not is_command and msg not in ["سوال", "رتب", "سباق", "صح غلط"] and room_id not in active_games:
         return
     
     mentionees = []
