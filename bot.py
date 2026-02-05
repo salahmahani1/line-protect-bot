@@ -57,11 +57,32 @@ GAMES_ENABLED = True
 def normalize(text):
     text = str(text).lower().strip()
 
-    text = re.sub(r'[أإآا]', 'ا', text)
-    text = re.sub(r'ة', 'ه', text)
-    text = re.sub(r'ى', 'ي', text)
+    # توحيد الحروف
+    replacements = {
+        "أ":"ا",
+        "إ":"ا",
+        "آ":"ا",
+        "ؤ":"و",
+        "ئ":"ي",
+        "ة":"ه",
+        "ى":"ي"
+    }
+
+    for k,v in replacements.items():
+        text = text.replace(k,v)
+
+    # حذف التشكيل
+    text = re.sub(r'[\u0617-\u061A\u064B-\u0652]', '', text)
+
+    # حذف الرموز
     text = re.sub(r'[^\w\s]', '', text)
 
+    # حذف المسافات المكررة
+    text = " ".join(text.split())
+    
+    if text.startswith("ال") and len(text) > 4:
+    text = text[2:]
+    
     return text
 
 
