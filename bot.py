@@ -199,9 +199,9 @@ def handle_message(event):
 
         # ================= AI =================
 
-trigger_words = ["طراد","يا طراد","بوت","يا بوت","bot","@"]
+        trigger_words = ["طراد","يا طراد","بوت","يا بوت","bot","@"]
 
-# لو حد عمل reply للبوت
+    # لو حد عمل reply للبوت
 if not reply and AI_ON:
     if event.message.quote_token:
         reply = ai_reply(msg)
@@ -214,8 +214,6 @@ if not reply and AI_ON:
 if not reply:
     return
         
-        if not reply:
-            return
 
         line_bot_api.reply_message(
             ReplyMessageRequest(
