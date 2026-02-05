@@ -1,164 +1,184 @@
-from flask import Flask, request, abort
+from flask import Flask, request
+import random
+import json
+import re
+from difflib import SequenceMatcher
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-from linebot.exceptions import InvalidSignatureError
 import os
-import random
-
-from utils import load_json, save_json, normalize, similar
 
 app = Flask(__name__)
 
 line_bot_api = LineBotApi(os.getenv("CHANNEL_ACCESS_TOKEN"))
 handler = WebhookHandler(os.getenv("CHANNEL_SECRET"))
 OWNER_ID = os.getenv("OWNER_ID")
-
-admins = load_json("admins.json",[OWNER_ID])
-questions = load_json("questions.json",[])
-truefalse = load_json("truefalse.json",[])
-race = load_json("race.json",[])
-mentions = load_json("mentions.json",{"on_mention":["نعم؟ 👀"]})
+admins = [OWNER_ID]
 
 active_games = {}
-GAMES_ENABLED = True
+games_enabled = True
 
 
-def is_admin(uid):
-    return uid in admins or uid == OWNER_ID
+# ================= LOAD JSON =================
+
+def load_json(file, default):
+    try:
+        with open(file, "r") as f:
+            return json.load(f)
+    except:
+        return default
 
 
-@app.route("/",methods=['GET'])
+questions = load_json("questions.json", [
+    {"q": "ما هو أثقل حيوان؟", "a": "الحوت الأزرق"}
+])
+
+mentions_data = load_json("mentions.json", {
+    "on_mention": ["نعم؟ 😎", "عايز ايه يا نجم؟"],
+    "on_return": ["رجعت اهو 😏"]
+})
+
+
+# ================= SMART ARABIC =================
+
+def normalize(text):
+    text = str(text).lower()
+
+    replacements = {
+        "أ": "ا",
+        "إ": "ا",
+        "آ": "ا",
+        "ة": "ه",
+        "ى": "ي",
+        "ؤ": "و",
+        "ئ": "ي"
+    }
+
+    for k, v in replacements.items():
+        text = text.replace(k, v)
+
+    text = re.sub(r'[^\w\s]', '', text)
+    text = " ".join(text.split())
+
+    return text
+
+
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio() > 0.75
+
+
+def is_admin(user):
+    return user in admins
+
+
+# ================= SERVER =================
+
+@app.route("/", methods=['GET'])
 def home():
-    return "BOT RUNNING 🔥"
+    return "BOT IS RUNNING 🔥"
 
 
-@app.route("/callback",methods=['POST'])
+@app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
+    handler.handle(body, signature)
+    return 'OK'
 
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
 
-    return "OK"
-
+# ================= EVENTS =================
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
 
-    global GAMES_ENABLED
-
     user_id = event.source.user_id
-    room_id = getattr(event.source,"group_id",user_id)
+    room_id = getattr(event.source, "group_id", user_id)
 
-    msg_raw = event.message.text
-    msg = normalize(msg_raw)
+    msg = normalize(event.message.text)
 
     reply = None
 
-    print("MSG:",msg)
+    # ========= OWNER COMMANDS =========
 
-# ================= ADMIN =================
+    if msg.startswith("رفع ادمن"):
+        if user_id != OWNER_ID:
+            reply = "❌ الأمر للمالك فقط"
+        else:
+            target = msg.replace("رفع ادمن", "").strip()
+            admins.append(target)
+            reply = "✅ تم رفع الأدمن"
 
-    if "رفع ادمن" in msg and user_id == OWNER_ID:
-        if event.message.mention:
-            for m in event.message.mention.mentionees:
-                admins.append(m.user_id)
-                save_json("admins.json",admins)
-                reply = "✅ تم رفع الأدمن"
+    elif msg.startswith("تنزيل ادمن"):
+        if user_id != OWNER_ID:
+            reply = "❌ الأمر للمالك فقط"
+        else:
+            target = msg.replace("تنزيل ادمن", "").strip()
+            if target in admins:
+                admins.remove(target)
+            reply = "✅ تم تنزيل الأدمن"
 
-    elif "تنزيل ادمن" in msg and user_id == OWNER_ID:
-        if event.message.mention:
-            for m in event.message.mention.mentionees:
-                admins.remove(m.user_id)
-                save_json("admins.json",admins)
-                reply = "✅ تم تنزيل الأدمن"
+    # ========= ADMIN =========
 
+    elif msg in ["قفل", "قفل اللعب"]:
+        if not is_admin(user_id):
+            reply = "❌ مش أدمن"
+        else:
+            global games_enabled
+            games_enabled = False
+            reply = "🔒 تم قفل الألعاب"
 
-    elif "قفل" in msg and is_admin(user_id):
-        GAMES_ENABLED = False
-        active_games.pop(room_id,None)
-        reply = "🔒 تم قفل الألعاب"
+    elif msg in ["فتح", "فتح اللعب"]:
+        if not is_admin(user_id):
+            reply = "❌ مش أدمن"
+        else:
+            games_enabled = True
+            reply = "🔓 تم فتح الألعاب"
 
+    elif msg == "حذف":
+        if room_id in active_games:
+            del active_games[room_id]
+            reply = "🗑 تم حذف اللعبة"
+        else:
+            reply = "مفيش لعبة شغالة 😅"
 
-    elif "فتح" in msg and is_admin(user_id):
-        GAMES_ENABLED = True
-        reply = "🔓 تم فتح الألعاب"
+    # ========= GAMES =========
 
+    elif msg in ["سؤال", "سوال"]:
 
-    elif "حذف" in msg and is_admin(user_id):
-        active_games.pop(room_id,None)
-        reply = "🚫 تم حذف اللعبة"
+        if not games_enabled:
+            reply = "🚫 الألعاب مقفولة"
+        elif room_id in active_games:
+            reply = "⚠️ في لعبة شغالة بالفعل"
+        else:
+            q = random.choice(questions)
+            active_games[room_id] = q
+            reply = "🧠 سؤال:\n" + q["q"]
 
-
-# ================= MENTION =================
-
-    elif "طراد" in msg:
-        reply = random.choice(mentions["on_mention"])
-    elif event.message.mention:
-         mentions_data = load_json("mentions.json", {"on_mention":["نعم؟"]})
-        reply = random.choice(mentions_data["on_mention"])
-
-# ================= GAMES =================
-
-    elif "سوال" in msg and GAMES_ENABLED:
-
-        q = random.choice(questions)
-
-        active_games[room_id] = {
-            "answer":normalize(q["a"])
-        }
-
-        reply = "🧠 "+q["q"]
-
-
-    elif "صح غلط" in msg and GAMES_ENABLED:
-
-        q = random.choice(truefalse)
-
-        active_games[room_id] = {
-            "answer":normalize(q["a"])
-        }
-
-        reply = "🤔 "+q["q"]
-
-
-    elif "سباق" in msg and GAMES_ENABLED:
-
-        word = random.choice(race)
-
-        active_games[room_id] = {
-            "answer":normalize(word)
-        }
-
-        reply = f"🏁 اكتب بسرعة:\n{word}"
-
-
-# ================= CHECK ANSWER =================
+    # ========= CHECK ANSWER =========
 
     elif room_id in active_games:
 
-        ans = active_games[room_id]["answer"]
+        answer = normalize(active_games[room_id]["a"])
 
-        if msg == ans or similar(msg,ans):
-            active_games.pop(room_id)
-            reply = "🔥 إجابة صحيحة!"
-            if random.random() < 0.5:
-                reply = random.choice(mentions_data["on_mention"])
-            if event.source.user_id == configuration.access_token:
-                return
-# ================= AUTO REPLY =================
+        if msg == answer or similar(msg, answer):
+            del active_games[room_id]
+            reply = "🎉 إجابة صحيحة!"
 
-    if event.message.mention and room_id not in active_games:
-        mentions_data = load_json("mentions.json", {"on_mention":["نعم؟"]})
+    # ========= MENTION =========
+
+    elif "@bot" in msg or "بوت" in msg:
         reply = random.choice(mentions_data["on_mention"])
 
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply)
-    )
+    # ========= DEFAULT =========
+
+    if not reply:
+        if random.random() < 0.03:
+            reply = "انا صاحي اهو 👀"
+
+    if reply:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=reply)
+        )
 
 
 if __name__ == "__main__":
