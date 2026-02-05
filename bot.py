@@ -99,6 +99,7 @@ def handle_message(event):
 
         reply = None
         group_id = None
+        
         AI_ON = False
 
         # ===== group detect =====
@@ -196,16 +197,22 @@ def handle_message(event):
 
         # ================= AI =================
 
-        trigger_words = ["بوت", "طراد", "bot"]
+        # ================= AI =================
 
-        
-        # لو حد عمل Reply للبوت
-        if not reply and AI_ON and event.message.quote_token:
-            reply = ai_reply(msg)
+trigger_words = ["طراد","يا طراد","بوت","يا بوت","bot","@"]
 
-# لو حد نادى البوت
-        elif not reply and AI_ON and any(word in msg for word in trigger_words):
-            reply = ai_reply(msg)
+# لو حد عمل reply للبوت
+if not reply and AI_ON:
+    if event.message.quote_token:
+        reply = ai_reply(msg)
+
+# لو حد ناداه
+if not reply and AI_ON:
+    if any(word in msg for word in trigger_words):
+        reply = ai_reply(msg)
+
+if not reply:
+    return
         
         if not reply:
             return
