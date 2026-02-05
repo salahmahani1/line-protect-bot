@@ -195,13 +195,12 @@ def handle_message(event):
                 "الناس كانت بتدور عليك 😂"
             ])
 
-        # ================= AI =================
 
-        # ================= AI =================
+# ================= AI =================
 
-        trigger_words = ["طراد","يا طراد","بوت","يا بوت","bot","@"]
+trigger_words = ["يا بوت","بوت","يا طراد","طراد","bot","@"]
 
-    # لو حد عمل reply للبوت
+# لو حد عمل reply
 if not reply and AI_ON:
     if event.message.quote_token:
         reply = ai_reply(msg)
@@ -211,6 +210,7 @@ if not reply and AI_ON:
     if any(word in msg for word in trigger_words):
         reply = ai_reply(msg)
 
+# مهم جدا
 if not reply:
     return
         
