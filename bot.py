@@ -349,7 +349,7 @@ def handle_message(event):
                 original_content_url=data["url"],
                 preview_image_url=data["url"]
             )
-        
+                
         elif t == "video":
             msg = VideoSendMessage(
                 original_content_url=data["url"],
@@ -363,57 +363,63 @@ def handle_message(event):
         return
 
 
-    # ================== MEDIA ==================
-
-    if group_id in waiting:
-
-        data_wait = waiting[group_id]
-
-        if data_wait["user"] != user_id:
-            return
-
-        trigger = data_wait["trigger"]
-
-        if isinstance(event.message, StickerMessage):
-
-            file_type = upload["resource_type"]  
-            # هيرجع image أو video
-            
-            commands.insert_one({
-                "group": group_id,
-                "trigger": trigger,
-                "type": file_type,
-                "url": upload["secure_url"]
-            })
-
-        else:
-
-            content = line_bot_api.get_message_content(event.message.id)
-
-            file_path = f"/tmp/{event.message.id}"
-
-            with open(file_path, "wb") as f:
-                for chunk in content.iter_content():
-                    f.write(chunk)
-
-            upload = cloudinary.uploader.upload(
-                file_path,
-                resource_type="auto"
+        # ================== MEDIA ==================
+        
+        if group_id in waiting:
+        
+            data_wait = waiting[group_id]
+        
+            if data_wait["user"] != user_id:
+                return
+        
+            trigger = data_wait["trigger"]
+        
+            # ✅ الاستيكر
+            if isinstance(event.message, StickerMessage):
+        
+                commands.insert_one({
+                    "group": group_id,
+                    "trigger": trigger,
+                    "type": "sticker",
+                    "package": str(event.message.package_id),
+                    "sticker": str(event.message.sticker_id)
+                })
+        
+            else:
+                # تحميل الملف من LINE
+                content = line_bot_api.get_message_content(event.message.id)
+        
+                file_path = f"/tmp/{event.message.id}"
+        
+                with open(file_path, "wb") as f:
+                    for chunk in content.iter_content():
+                        f.write(chunk)
+        
+                # رفع على Cloudinary
+                upload = cloudinary.uploader.upload(
+                    file_path,
+                    resource_type="auto"
+                )
+        
+                file_type = upload["resource_type"]
+        
+                # 🔥 حل مشكلة الفيديو
+                if file_type == "raw":
+                    file_type = "video"
+        
+                commands.insert_one({
+                    "group": group_id,
+                    "trigger": trigger,
+                    "type": file_type,
+                    "url": upload["secure_url"]
+                })
+        
+            del waiting[group_id]
+        
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="✅ تم تسجيل الرد")
             )
-
-            commands.insert_one({
-                "group": group_id,
-                "trigger": trigger,
-                "type": "media",
-                "url": upload["secure_url"]
-            })
-
-        del waiting[group_id]
-
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="✅ تم تسجيل الرد")
-        )
 
 
 # ================== RUN ==================
