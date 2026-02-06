@@ -109,12 +109,46 @@ def callback():
 @handler.add(MessageEvent)
 def handle_message(event):
 
-    if not hasattr(event.source, "group_id"):
-        return
+    if isinstance(event.message, TextMessage):
 
-    group_id = event.source.group_id
-    user_id = event.source.user_id
+        text = event.message.text
+        user_id = event.source.user_id
 
+
+        # هنا تحط .h
+        if text == ".h":
+
+            if not is_admin_or_owner(user_id):
+                return
+
+            groups = commands.distinct("group")
+
+            if not groups:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="❌ مفيش اوامر")
+                )
+                return
+
+
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="🔥 ببعتلك الاوامر برايفت...")
+            )
+
+            for g in groups:
+
+                triggers = commands.distinct("trigger", {"group": g})
+
+                msg = "📌 اوامر جروب:\n\n"
+
+                for t in triggers:
+                    msg += f"• {t}\n"
+
+                line_bot_api.push_message(
+                event.source.user_id,  # يبعته لك برايفت
+                TextSendMessage(text=msg)
+                )
 
     # ================= TEXT =================
     if isinstance(event.message, TextMessage):
@@ -232,45 +266,7 @@ def handle_message(event):
                 TextSendMessage(text="🔥 ابعت الرد دلوقتي")
             )
             return
-        
-         # ===== اظهار الاوامر لكل جروب =====
-if text == ".h":
-
-    if not is_admin_or_owner(user_id):
-        return
-
-    groups = commands.distinct("group")
-
-    if not groups:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="❌ مفيش اوامر متسجلة")
-        )
-        return
-
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text="🔥 ببعتلك الاوامر برايفت...")
-    )
-
-    for g in groups:
-
-        triggers = commands.distinct("trigger", {"group": g})
-
-        msg = "📌 اوامر جروب:\n\n"
-
-        for t in triggers:
-            msg += f"• {t}\n"
-
-        if len(msg) > 4900:
-            msg = msg[:4900]
-
-
-        line_bot_api.push_message(
-            event.source.user_id,  # يبعته لك برايفت
-            TextSendMessage(text=msg)
-        )
+    
 
 
         # ===== حذف امر =====
