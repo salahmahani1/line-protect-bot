@@ -133,36 +133,37 @@ def handle_message(event):
             )
             return
             
-        
         # ================== DELETE ==================
 
-if text.startswith("طراد حذف"):
-
-    trigger = text.replace("طراد حذف", "").strip()
-
-    if not trigger:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="❌ اكتب اسم الامر اللي عايز تحذفه")
-        )
-        return
-
-    result = commands.delete_many({
-        "group": group_id,
-        "trigger": trigger
-    })
-
-    if result.deleted_count == 0:
-        msg = "❌ الامر مش موجود"
-    else:
-        msg = f"✅ تم حذف {result.deleted_count} رد"
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=msg)
-    )
-
-    return
+        if text.startswith("طراد حذف"):
+        
+            trigger = text.replace("طراد حذف", "").strip()
+        
+            if not trigger:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="❌ اكتب اسم الامر اللي عايز تحذفه")
+                )
+                return
+        
+            result = commands.delete_many({
+                "group": group_id,
+                "trigger": trigger
+            })
+        
+            if result.deleted_count == 0:
+                msg = "❌ الامر مش موجود"
+            else:
+                msg = f"✅ تم حذف {result.deleted_count} رد"
+        
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=msg)
+            )
+        
+            return
+    
+    
         
         # ================== ADMIN ==================
 
