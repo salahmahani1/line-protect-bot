@@ -228,25 +228,48 @@ def handle_text(event):
         return
 
 
-    # ========= HELP =========
-
+    # ================== HELP ==================
+    
     if text == ".h":
-
-        triggers = commands.distinct("trigger", {"group": group_id})
-
-        if not triggers:
+    
+        if not is_admin(user_id):
+            return
+    
+        groups = commands.distinct("group")
+    
+        if not groups:
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="مفيش أوامر")
+                TextSendMessage(text="❌ مفيش أوامر متسجلة")
             )
             return
-
-        msg = "\n".join(triggers)
-
+    
+        # رد سريع علشان التوكن ميبقاش invalid
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=msg)
+            TextSendMessage(text="📩 بعتلك الأوامر خاص")
         )
+    
+        for g in groups:
+            try:
+                summary = line_bot_api.get_group_summary(g)
+                group_name = summary.group_name
+            except:
+                group_name = "جروب غير معروف"
+    
+            triggers = commands.distinct("trigger", {"group": g})
+    
+            if not triggers:
+                continue
+    
+            msg = f"📌 {group_name}\n\n"
+            msg += "\n".join([f"• {t}" for t in triggers])
+    
+            try:
+                line_bot_api.push_message(user_id, TextSendMessage(text=msg))
+            except:
+                pass
+    
         return
 
 
