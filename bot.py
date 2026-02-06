@@ -70,7 +70,10 @@ def handle_message(event):
                 )
                 return
 
-            waiting[group_id] = trigger
+            waiting[group_id] = {
+            "trigger": trigger,
+            "user": event.source.user_id
+            }
 
             line_bot_api.reply_message(
                 event.reply_token,
@@ -173,8 +176,11 @@ def handle_message(event):
 
     # ================= MEDIA =================# ================= MEDIA =================
     if group_id in waiting:
-        trigger = waiting[group_id]
-
+        data_wait = waiting[group_id]
+        trigger = data_wait["trigger"]
+        owner = data_wait["user"]
+        if event.source.user_id != owner:
+            return
     # استيكر
     if isinstance(event.message, StickerMessage):
 
