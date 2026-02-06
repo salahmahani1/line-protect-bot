@@ -116,23 +116,35 @@ def handle_message(event):
         # ================== OWNER ==================
 
         if text.startswith("طراد رفع اونر"):
-
+        
             if not is_owner(user_id):
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="❌ الامر للاونر فقط")
+                )
                 return
-
-            for m in event.message.mentions.mentionees:
+        
+            if not event.message.mention:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="⚠️ منشن الشخص الاول")
+                )
+                return
+        
+            for m in event.message.mention.mentionees:
+        
                 owners.update_one(
                     {"user": m.user_id},
                     {"$set": {"user": m.user_id}},
                     upsert=True
                 )
-
+        
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="✅ تم رفع اونر")
+                TextSendMessage(text="🔥 تم رفع اونر بنجاح")
             )
-            return
-            
+                return
+                
         # ================== DELETE ==================
 
         if text.startswith("طراد حذف"):
@@ -168,22 +180,34 @@ def handle_message(event):
         # ================== ADMIN ==================
 
         if text.startswith("طراد رفع ادمن"):
-
+        
             if not is_owner(user_id):
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="❌ الامر للاونر فقط")
+                )
                 return
-
-            for m in event.message.mentions.mentionees:
+        
+            if not event.message.mention:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="⚠️ اعمل منشن للشخص")
+                )
+                return
+        
+            for m in event.message.mention.mentionees:
+        
                 admins.update_one(
                     {"user": m.user_id},
                     {"$set": {"user": m.user_id}},
                     upsert=True
                 )
-
+        
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text="✅ تم رفع ادمن")
             )
-            return
+                return
 
         # ================== BAN NAME ==================
 
