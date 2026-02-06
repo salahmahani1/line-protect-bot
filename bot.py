@@ -112,72 +112,55 @@ def handle_message(event):
                 event.reply_token,
                 TextSendMessage(text=msg)
             )
-            return
+            return 
 
         # الرد
-        import random
-        results = list(collection.find({
-        "group": group_id,
-        "trigger": text
-        }))
+import random
 
-        if data["type"] == "text":
-            
-            line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=data["content"])
-            )
-        elif data["type"] == "sticker":
-            line_bot_api.reply_message(
-            event.reply_token,
-            StickerSendMessage(
-            package_id=data["package"],
-            sticker_id=data["sticker"]
-            )
-            )
-            
-        elif data["type"] == "media":
-            line_bot_api.reply_message(
-            event.reply_token,
-            ImageSendMessage(
-            original_content_url=data["url"],
-            preview_image_url=data["url"]
-            )
-            )
+results = list(collection.find({
+    "group": group_id,
+    "trigger": text
+}))
 
-        if data:
+if not results:
+    return
 
-            t = data["type"]
+data = random.choice(results)
+t = data["type"]
 
-            if t == "text":
-                msg = TextSendMessage(text=data["content"])
+if t == "text":
+    msg = TextSendMessage(text=data["content"])
 
-            elif t == "image":
-                msg = ImageSendMessage(
-                    original_content_url=data["url"],
-                    preview_image_url=data["url"]
-                )
+elif t == "sticker":
+    msg = StickerSendMessage(
+        package_id=str(data["package"]),
+        sticker_id=str(data["sticker"])
+    )
 
-            elif t == "video":
-                msg = VideoSendMessage(
-                    original_content_url=data["url"],
-                    preview_image_url=data["url"]
-                )
+elif t == "image":
+    msg = ImageSendMessage(
+        original_content_url=data["url"],
+        preview_image_url=data["url"]
+    )
 
-            elif t == "file":
-                msg = FileSendMessage(
-                    original_content_url=data["url"],
-                    file_name="file"
-                )
+elif t == "video":
+    msg = VideoSendMessage(
+        original_content_url=data["url"],
+        preview_image_url=data["url"]
+    )
 
-            elif t == "sticker":
-                msg = StickerSendMessage(
-                    package_id=str(data["package"]),
-                     sticker_id=str(data["sticker"])
-                )
+elif t == "file":
+    msg = FileSendMessage(
+        original_content_url=data["url"],
+        file_name="file"
+    )
 
-            line_bot_api.reply_message(event.reply_token, msg)
-            return
+else:
+    return
+
+line_bot_api.reply_message(event.reply_token, msg)
+return
+
 
         # لو مستني نص يتسجل
         if group_id in waiting:
