@@ -132,7 +132,38 @@ def handle_message(event):
                 TextSendMessage(text="✅ تم رفع اونر")
             )
             return
+            
+        
+        # ================== DELETE ==================
 
+if text.startswith("طراد حذف"):
+
+    trigger = text.replace("طراد حذف", "").strip()
+
+    if not trigger:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="❌ اكتب اسم الامر اللي عايز تحذفه")
+        )
+        return
+
+    result = commands.delete_many({
+        "group": group_id,
+        "trigger": trigger
+    })
+
+    if result.deleted_count == 0:
+        msg = "❌ الامر مش موجود"
+    else:
+        msg = f"✅ تم حذف {result.deleted_count} رد"
+
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=msg)
+    )
+
+    return
+        
         # ================== ADMIN ==================
 
         if text.startswith("طراد رفع ادمن"):
@@ -196,10 +227,15 @@ def handle_message(event):
             )
 
             for g in groups:
-
+                try:
+                   group_summary = line_bot_api.get_group_summary(g)
+                   group_name = group_summary.group_name
+                except:
+                    group_name = "جروب غير معروف"
+                    
                 triggers = commands.distinct("trigger", {"group": g})
 
-                msg = f"📌 جروب:\n{g}\n\n"
+                msg = f"📌 اسم الجروب: {group_name}\n\n"
                 msg += "\n".join(triggers)
 
                 line_bot_api.push_message(
