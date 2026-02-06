@@ -115,10 +115,38 @@ def handle_message(event):
             return
 
         # الرد
-        data = collection.find_one({
-            "group": group_id,
-            "trigger": text.lower()
-        })
+        import random
+        results = list(collection.find({
+        "group": group_id,
+        "trigger": text
+        }))
+
+if data["type"] == "text":
+
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=data["content"])
+    )
+
+elif data["type"] == "sticker":
+
+    line_bot_api.reply_message(
+        event.reply_token,
+        StickerSendMessage(
+            package_id=data["package"],
+            sticker_id=data["sticker"]
+        )
+    )
+
+elif data["type"] == "media":
+
+    line_bot_api.reply_message(
+        event.reply_token,
+        ImageSendMessage(
+            original_content_url=data["url"],
+            preview_image_url=data["url"]
+        )
+    )
 
         if data:
 
@@ -174,14 +202,17 @@ def handle_message(event):
             )
             return
 
-    # ================= MEDIA =================# ================= MEDIA =================
+    # ================= MEDIA =================# 
     if group_id in waiting:
-        data_wait = waiting[group_id]
-        trigger = data_wait["trigger"]
-        owner = data_wait["user"]
-        if event.source.user_id != owner:
-            return
-    # استيكر
+
+    data_wait = waiting[group_id]
+    trigger = data_wait["trigger"]
+    owner = data_wait["user"]
+
+    if event.source.user_id != owner:
+        return
+
+    # ✅ استيكر
     if isinstance(event.message, StickerMessage):
 
         collection.insert_one({
@@ -192,38 +223,43 @@ def handle_message(event):
             "sticker": str(event.message.sticker_id)
         })
 
+    # ✅ صور + فيديو + ملفات + صوت
+    elif isinstance(event.message, (ImageMessage, VideoMessage, AudioMessage, FileMessage)):
+
+        try:
+            content = line_bot_api.get_message_content(event.message.id)
+
+            file_path = f"{event.message.id}.dat"
+
+            with open(file_path, "wb") as f:
+                for chunk in content.iter_content():
+                    f.write(chunk)
+
+            upload = cloudinary.uploader.upload(
+                file_path,
+                resource_type="auto"
+            )
+
+            url = upload["secure_url"]
+
+            collection.insert_one({
+                "group": group_id,
+                "trigger": trigger,
+                "type": "media",
+                "url": url
+            })
+
+        except Exception as e:
+            print("UPLOAD ERROR:", e)
+            return
+
     else:
-        content = line_bot_api.get_message_content(event.message.id)
-
-        file_path = f"{event.message.id}.dat"
-
-        with open(file_path, "wb") as f:
-            for chunk in content.iter_content():
-                f.write(chunk)
-
-        upload = cloudinary.uploader.upload(
-            file_path,
-            resource_type="auto"
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="❌ ابعت نص او صورة او استيكر")
         )
+        return
 
-        url = upload["secure_url"]
-
-        media_type = "file"
-
-        if isinstance(event.message, ImageMessage):
-            media_type = "image"
-
-        elif isinstance(event.message, VideoMessage):
-            media_type = "video"
-
-        collection.insert_one({
-            "group": group_id,
-            "trigger": trigger,
-            "type": media_type,
-            "url": url
-        })
-
-        os.remove(file_path)  # مهم
 
     del waiting[group_id]
 
@@ -231,8 +267,6 @@ def handle_message(event):
         event.reply_token,
         TextSendMessage(text=f"🔥 اتسجل ({trigger})")
     )
-
-
 
 
 # ================= RUN =================
