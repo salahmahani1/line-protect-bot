@@ -124,7 +124,7 @@ def handle_message(event):
                 )
                 return
         
-            if not event.message.mentions:
+            if not event.message.mention:
                 line_bot_api.reply_message(
                     event.reply_token,
                     TextSendMessage(text="⚠️ منشن الشخص الاول")
@@ -188,7 +188,7 @@ def handle_message(event):
                 )
                 return
         
-            if not event.message.mentions:
+            if not event.message.mention:
                 line_bot_api.reply_message(
                     event.reply_token,
                     TextSendMessage(text="⚠️ اعمل منشن للشخص")
