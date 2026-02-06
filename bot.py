@@ -232,41 +232,40 @@ def handle_message(event):
                 TextSendMessage(text="🔥 ابعت الرد دلوقتي")
             )
             return
-            
-        # ===== اظهار الاوامر لكل جروب =====
-        if text == ".h":
-            if not is_admin_or_owner(user_id):
-                return
-                
-                
-                groups = commands.distinct("group")
-                
-        if not groups:
-            line_bot_api.reply_message(
+        
+         # ===== اظهار الاوامر لكل جروب =====
+if text == ".h":
+
+    if not is_admin_or_owner(user_id):
+        return
+
+    groups = commands.distinct("group")
+
+    if not groups:
+        line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text="❌ مفيش اوامر متسجلة")
-            )
-            return
+        )
+        return
 
 
-    # اول رسالة رد
-            line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="🔥 جاري عرض الاوامر لكل جروب...")
-            )
-            
-        for g in groups:
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text="🔥 ببعتلك الاوامر برايفت...")
+    )
+
+    for g in groups:
 
         triggers = commands.distinct("trigger", {"group": g})
 
-        msg = f"📌 اوامر الجروب:\n\n"
+        msg = "📌 اوامر جروب:\n\n"
 
         for t in triggers:
             msg += f"• {t}\n"
 
-        # حماية من الرسائل الطويلة
         if len(msg) > 4900:
-            msg = msg[:4900] + "\n..."
+            msg = msg[:4900]
+
 
         line_bot_api.push_message(
             event.source.user_id,  # يبعته لك برايفت
