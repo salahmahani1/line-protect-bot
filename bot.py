@@ -1,98 +1,80 @@
+import os
+import random
+import cloudinary
+import cloudinary.uploader
+
 from flask import Flask, request, abort
+from pymongo import MongoClient
+
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
 
-import os
-import random
-import re
-import cloudinary
-import cloudinary.uploader
-from pymongo import MongoClient
+# ================== CONFIG ==================
 
+CHANNEL_ACCESS_TOKEN = os.getenv("CHANNEL_ACCESS_TOKEN")
+CHANNEL_SECRET = os.getenv("CHANNEL_SECRET")
+MONGO_URI = os.getenv("MONGO_URI")
+CLOUD_NAME = os.getenv("CLOUD_NAME")
+CLOUD_KEY = os.getenv("CLOUD_KEY")
+CLOUD_SECRET = os.getenv("CLOUD_SECRET")
+
+line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
+handler = WebhookHandler(CHANNEL_SECRET)
+
+client = MongoClient(MONGO_URI)
+db = client["linebot"]
+
+commands = db["commands"]
+admins = db["admins"]
+owners = db["owners"]
+banned_names = db["banned"]
+
+cloudinary.config(
+    cloud_name=CLOUD_NAME,
+    api_key=CLOUD_KEY,
+    api_secret=CLOUD_SECRET
+)
 
 app = Flask(__name__)
 
-# ================= LINE =================
-line_bot_api = LineBotApi(os.getenv("CHANNEL_ACCESS_TOKEN"))
-handler = WebhookHandler(os.getenv("CHANNEL_SECRET"))
+waiting = {}  # تخزين اللي بيعمل تسجيل مؤقت
 
-# ================= MONGO =================
-mongo = MongoClient(os.getenv("MONGO"))
-db = mongo["protect_bot"]
+# ================== HELPERS ==================
 
-commands = db.commands
-owners = db.owners
-admins = db.admins
-blocked = db.blocked_words
-
-blocked.create_index("word", unique=True)
-
-# ================= CLOUDINARY =================
-cloudinary.config(secure=True)
-
-waiting = {}
-
-# ================= SMART NORMALIZE =================
-
-def normalize(text):
-    text = text.lower()
-
-    # حذف المسافات
-    text = text.replace(" ", "")
-
-    # حذف التكرار
-    text = re.sub(r'(.)\1+', r'\1', text)
-
-    # تحويل عربي / إنجليزي قريب
-    replace_map = {
-        "4": "a",
-        "@": "a",
-        "0": "o",
-        "1": "i",
-        "3": "e",
-        "7": "h",
-        "9": "q"
-    }
-
-    for k,v in replace_map.items():
-        text = text.replace(k, v)
-
-    return text
+def get_group_id(event):
+    if event.source.type == "group":
+        return event.source.group_id
+    elif event.source.type == "room":
+        return event.source.room_id
+    return event.source.user_id
 
 
-# ================= PERMISSIONS =================
-
-def is_owner(uid):
-    return owners.find_one({"user_id": uid}) is not None
+def is_owner(user):
+    return owners.find_one({"user": user})
 
 
-def is_admin(uid):
-    return admins.find_one({"user_id": uid}) is not None
+def is_admin(user):
+    return admins.find_one({"user": user}) or is_owner(user)
 
 
-def is_admin_or_owner(uid):
-    return is_owner(uid) or is_admin(uid)
+def name_banned(trigger):
+    banned = banned_names.find()
 
+    for b in banned:
+        word = b["name"]
 
-# ================= BLOCK CHECK =================
-
-def is_blocked(word):
-
-    normalized = normalize(word)
-
-    for w in blocked.find():
-        if normalize(w["word"]) in normalized or normalized in normalize(w["word"]):
+        # يمنع التكرار زي قطااام
+        if word in trigger:
             return True
 
     return False
 
 
-# ================= WEBHOOK =================
+# ================== WEBHOOK ==================
 
 @app.route("/callback", methods=['POST'])
 def callback():
-
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
 
@@ -104,21 +86,93 @@ def callback():
     return 'OK'
 
 
-# ================= MESSAGE =================
+# ================== MESSAGE ==================
 
 @handler.add(MessageEvent)
 def handle_message(event):
 
+    if not isinstance(event.message, Message):
+        return
+
+    group_id = get_group_id(event)
+    user_id = event.source.user_id
+
+    # نخلي التسجيل في الجروبات بس
+    if event.source.type == "user":
+        return
+
+    # ================== TEXT ==================
+
     if isinstance(event.message, TextMessage):
 
-        text = event.message.text
-        user_id = event.source.user_id
+        text = event.message.text.strip()
 
+        # ================== OWNER ==================
 
-        # هنا تحط .h
+        if text.startswith("طراد رفع اونر"):
+
+            if not is_owner(user_id):
+                return
+
+            for m in event.message.mentions.mentionees:
+                owners.update_one(
+                    {"user": m.user_id},
+                    {"$set": {"user": m.user_id}},
+                    upsert=True
+                )
+
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="✅ تم رفع اونر")
+            )
+            return
+
+        # ================== ADMIN ==================
+
+        if text.startswith("طراد رفع ادمن"):
+
+            if not is_owner(user_id):
+                return
+
+            for m in event.message.mentions.mentionees:
+                admins.update_one(
+                    {"user": m.user_id},
+                    {"$set": {"user": m.user_id}},
+                    upsert=True
+                )
+
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="✅ تم رفع ادمن")
+            )
+            return
+
+        # ================== BAN NAME ==================
+
+        if text.startswith("طراد حظر اسم"):
+
+            if not is_admin(user_id):
+                return
+
+            name = text.replace("طراد حظر اسم", "").strip()
+
+            banned_names.update_one(
+                {"name": name},
+                {"$set": {"name": name}},
+                upsert=True
+            )
+
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"🚫 تم حظر الاسم: {name}")
+            )
+            return
+
+        # ================== HELP ==================
+
         if text == ".h":
 
-            if not is_admin_or_owner(user_id):
+            if not is_admin(user_id):
                 return
 
             groups = commands.distinct("group")
@@ -126,288 +180,165 @@ def handle_message(event):
             if not groups:
                 line_bot_api.reply_message(
                     event.reply_token,
-                    TextSendMessage(text="❌ مفيش اوامر")
+                    TextSendMessage(text="❌ مفيش أوامر متسجلة")
                 )
                 return
 
-
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="🔥 ببعتلك الاوامر برايفت...")
+                TextSendMessage(text="📩 بص الخاص")
             )
 
             for g in groups:
 
                 triggers = commands.distinct("trigger", {"group": g})
 
-                msg = "📌 اوامر جروب:\n\n"
-
-                for t in triggers:
-                    msg += f"• {t}\n"
+                msg = f"📌 جروب:\n{g}\n\n"
+                msg += "\n".join(triggers)
 
                 line_bot_api.push_message(
-                event.source.user_id,  # يبعته لك برايفت
-                TextSendMessage(text=msg)
+                    user_id,
+                    TextSendMessage(text=msg)
                 )
 
-    # ================= TEXT =================
-    if isinstance(event.message, TextMessage):
-
-        text = event.message.text.strip()
-
-
-        # ===== رفع اونر =====
-        if text.startswith("طراد رفع اونر"):
-
-            if not is_owner(user_id):
-                return
-
-            if event.message.mention:
-
-                for m in event.message.mention.mentionees:
-                    owners.update_one(
-                        {"user_id": m.user_id},
-                        {"$set": {"user_id": m.user_id}},
-                        upsert=True
-                    )
-
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text="👑 تم رفعه اونر")
-                )
             return
 
+        # ================== REGISTER ==================
 
-        # ===== رفع ادمن =====
-        if text.startswith("طراد رفع ادمن"):
-
-            if not is_owner(user_id):
-                return
-
-            if event.message.mention:
-
-                for m in event.message.mention.mentionees:
-                    admins.update_one(
-                        {"user_id": m.user_id},
-                        {"$set": {"user_id": m.user_id}},
-                        upsert=True
-                    )
-
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text="🔥 تم رفعه ادمن")
-                )
-            return
-
-
-        # ===== حظر كلمة =====
-        if text.startswith("طراد حظر اسم"):
-
-            if not is_admin_or_owner(user_id):
-                return
-
-            word = text.replace("طراد حظر اسم","").strip()
-
-            if not word:
-                return
-
-            blocked.update_one(
-                {"word": word},
-                {"$set":{"word": word}},
-                upsert=True
-            )
-
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=f"🚫 تم حظر ({word}) في كل الجروبات")
-            )
-            return
-
-
-        # ===== فك الحظر =====
-        if text.startswith("طراد فك حظر"):
-
-            if not is_admin_or_owner(user_id):
-                return
-
-            word = text.replace("طراد فك حظر","").strip()
-
-            blocked.delete_one({"word": word})
-
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=f"✅ تم فك الحظر عن ({word})")
-            )
-            return
-
-
-        # ===== تسجيل امر =====
         if text.startswith("طراد سجل"):
 
+            trigger = text.replace("طراد سجل", "").strip()
 
-            trigger = text.replace("طراد سجل","").strip()
-
-            if is_blocked(trigger):
-
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text="❌ الاسم دا محظور عالمياً")
-                )
+            if not trigger:
                 return
 
+            if name_banned(trigger):
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="🚫 الاسم محظور")
+                )
+                return
 
             waiting[group_id] = {
                 "trigger": trigger,
-                "owner": user_id
+                "user": user_id
             }
 
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="🔥 ابعت الرد دلوقتي")
+                TextSendMessage(text="🔥 ابعت الرد (نص / صورة / فيديو / استيكر)")
             )
             return
-    
 
+        # ================== SAVE TEXT ==================
 
-        # ===== حذف امر =====
-        if text.startswith("طراد حذف"):
+        if group_id in waiting:
 
+            data_wait = waiting[group_id]
 
+            if data_wait["user"] != user_id:
+                return
 
-            trigger = text.replace("طراد حذف","").strip()
-
-            commands.delete_many({
+            commands.insert_one({
                 "group": group_id,
-                "trigger": trigger
+                "trigger": data_wait["trigger"],
+                "type": "text",
+                "content": text
             })
+
+            del waiting[group_id]
 
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="✅ تم حذف الامر")
+                TextSendMessage(text="✅ تم التسجيل")
             )
             return
 
+        # ================== AUTO REPLY ==================
 
-        # ===== الرد =====
         results = list(commands.find({
             "group": group_id,
             "trigger": text
         }))
 
-        if results:
-
-            data = random.choice(results)
-
-            t = data["type"]
-
-            if t == "text":
-                msg = TextSendMessage(text=data["content"])
-
-            elif t == "sticker":
-                msg = StickerSendMessage(
-                    package_id=str(data["package"]),
-                    sticker_id=str(data["sticker"])
-                )
-
-            elif t == "image":
-                msg = ImageSendMessage(
-                    original_content_url=data["url"],
-                    preview_image_url=data["url"]
-                )
-
-            elif t == "video":
-                msg = VideoSendMessage(
-                    original_content_url=data["url"],
-                    preview_image_url=data["url"]
-                )
-
-            else:
-                return
-
-            line_bot_api.reply_message(event.reply_token, msg)
+        if not results:
             return
 
+        data = random.choice(results)
 
-    # ================= SAVE =================
+        t = data["type"]
 
-    if group_id not in waiting:
+        if t == "text":
+            msg = TextSendMessage(text=data["content"])
+
+        elif t == "sticker":
+            msg = StickerSendMessage(
+                package_id=data["package"],
+                sticker_id=data["sticker"]
+            )
+
+        else:
+            msg = ImageSendMessage(
+                original_content_url=data["url"],
+                preview_image_url=data["url"]
+            )
+
+        line_bot_api.reply_message(event.reply_token, msg)
         return
 
-    if waiting[group_id]["owner"] != user_id:
-        return
 
-    trigger = waiting[group_id]["trigger"]
+    # ================== MEDIA ==================
 
+    if group_id in waiting:
 
-    # نص
-    if isinstance(event.message, TextMessage):
+        data_wait = waiting[group_id]
 
-        commands.insert_one({
-            "group": group_id,
-            "trigger": trigger,
-            "type": "text",
-            "content": event.message.text
-        })
+        if data_wait["user"] != user_id:
+            return
+
+        trigger = data_wait["trigger"]
+
+        if isinstance(event.message, StickerMessage):
+
+            commands.insert_one({
+                "group": group_id,
+                "trigger": trigger,
+                "type": "sticker",
+                "package": str(event.message.package_id),
+                "sticker": str(event.message.sticker_id)
+            })
+
+        else:
+
+            content = line_bot_api.get_message_content(event.message.id)
+
+            file_path = f"/tmp/{event.message.id}"
+
+            with open(file_path, "wb") as f:
+                for chunk in content.iter_content():
+                    f.write(chunk)
+
+            upload = cloudinary.uploader.upload(
+                file_path,
+                resource_type="auto"
+            )
+
+            commands.insert_one({
+                "group": group_id,
+                "trigger": trigger,
+                "type": "media",
+                "url": upload["secure_url"]
+            })
 
         del waiting[group_id]
 
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="✅ تم تسجيل النص")
+            TextSendMessage(text="✅ تم تسجيل الرد")
         )
-        return
 
 
-    # استيكر
-    if isinstance(event.message, StickerMessage):
-
-        commands.insert_one({
-            "group": group_id,
-            "trigger": trigger,
-            "type": "sticker",
-            "package": event.message.package_id,
-            "sticker": event.message.sticker_id
-        })
-
-        del waiting[group_id]
-
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="🔥 تم تسجيل الاستيكر")
-        )
-        return
-
-
-    # ميديا
-    content = line_bot_api.get_message_content(event.message.id)
-
-    file_path = f"/tmp/{event.message.id}"
-
-    with open(file_path, "wb") as f:
-        for chunk in content.iter_content():
-            f.write(chunk)
-
-    upload = cloudinary.uploader.upload(file_path, resource_type="auto")
-
-    media_type = "image"
-
-    if isinstance(event.message, VideoMessage):
-        media_type = "video"
-
-    commands.insert_one({
-        "group": group_id,
-        "trigger": trigger,
-        "type": media_type,
-        "url": upload["secure_url"]
-    })
-
-    del waiting[group_id]
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text="🚀 تم تسجيل الميديا")
-    )
-
+# ================== RUN ==================
 
 if __name__ == "__main__":
     app.run()
