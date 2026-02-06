@@ -121,32 +121,29 @@ def handle_message(event):
         "trigger": text
         }))
 
-if data["type"] == "text":
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=data["content"])
-    )
-
-elif data["type"] == "sticker":
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        StickerSendMessage(
+        if data["type"] == "text":
+            
+            line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=data["content"])
+            )
+        elif data["type"] == "sticker":
+            line_bot_api.reply_message(
+            event.reply_token,
+            StickerSendMessage(
             package_id=data["package"],
             sticker_id=data["sticker"]
-        )
-    )
-
-elif data["type"] == "media":
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        ImageSendMessage(
+            )
+            )
+            
+        elif data["type"] == "media":
+            line_bot_api.reply_message(
+            event.reply_token,
+            ImageSendMessage(
             original_content_url=data["url"],
             preview_image_url=data["url"]
-        )
-    )
+            )
+            )
 
         if data:
 
