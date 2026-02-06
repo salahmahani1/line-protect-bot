@@ -210,8 +210,6 @@ def handle_message(event):
         # ===== تسجيل امر =====
         if text.startswith("طراد سجل"):
 
-            if not is_admin_or_owner(user_id):
-                return
 
             trigger = text.replace("طراد سجل","").strip()
 
@@ -239,8 +237,7 @@ def handle_message(event):
         # ===== حذف امر =====
         if text.startswith("طراد حذف"):
 
-            if not is_admin_or_owner(user_id):
-                return
+
 
             trigger = text.replace("طراد حذف","").strip()
 
