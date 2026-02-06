@@ -30,6 +30,12 @@ admins = db["admins"]
 owners = db["owners"]
 banned_names = db["banned"]
 
+OWNER_ID = os.getenv("OWNER_ID")
+
+if OWNER_ID and not owners.find_one({"user": OWNER_ID}):
+    owners.insert_one({"user": OWNER_ID})
+
+
 cloudinary.config(
     cloud_name=CLOUD_NAME,
     api_key=CLOUD_KEY,
