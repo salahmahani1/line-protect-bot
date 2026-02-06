@@ -322,48 +322,46 @@ def handle_message(event):
             return
 
         # ================== AUTO REPLY ==================
-
+        
         results = list(commands.find({
             "group": group_id,
             "trigger": text
         }))
-
-        if not results:
+        
+        if results:
+        
+            data = random.choice(results)
+            t = data["type"]
+        
+            if t == "text":
+                msg = TextSendMessage(text=data["content"])
+        
+            elif t == "sticker":
+                msg = StickerSendMessage(
+                    package_id=data["package"],
+                    sticker_id=data["sticker"]
+                )
+        
+            elif t == "image":
+                msg = ImageSendMessage(
+                    original_content_url=data["url"],
+                    preview_image_url=data["url"]
+                )
+        
+            elif t == "video":
+                msg = VideoSendMessage(
+                    original_content_url=data["url"],
+                    preview_image_url=data["url"]
+                )
+        
+            else:
+                msg = TextSendMessage(text="⚠️ نوع ملف غير مدعوم")
+        
+            line_bot_api.reply_message(event.reply_token, msg)
             return
-
-        data = random.choice(results)
-
-        t = data["type"]
-
-        if t == "text":
-            msg = TextSendMessage(text=data["content"])
-
-        elif t == "sticker":
-            msg = StickerSendMessage(
-                package_id=data["package"],
-                sticker_id=data["sticker"]
-            )
-
-        elif t == "image":
-            msg = ImageSendMessage(
-                original_content_url=data["url"],
-                preview_image_url=data["url"]
-            )
-                
-        elif t == "video":
-            msg = VideoSendMessage(
-                original_content_url=data["url"],
-                preview_image_url=data["url"]
-            )
         
-        else:
-            msg = TextSendMessage(text="⚠️ نوع الملف غير معروف")
         
-        line_bot_api.reply_message(event.reply_token, msg)
-        return
-
-
-        # ================== MEDIA ==================
+        # ================== SAVE MEDIA ==================
         
         if group_id in waiting:
         
@@ -374,7 +372,7 @@ def handle_message(event):
         
             trigger = data_wait["trigger"]
         
-            # ✅ الاستيكر
+            # 🔥 استيكر
             if isinstance(event.message, StickerMessage):
         
                 commands.insert_one({
@@ -386,9 +384,9 @@ def handle_message(event):
                 })
         
             else:
+        
                 # تحميل الملف من LINE
                 content = line_bot_api.get_message_content(event.message.id)
-        
                 file_path = f"/tmp/{event.message.id}"
         
                 with open(file_path, "wb") as f:
@@ -401,11 +399,15 @@ def handle_message(event):
                     resource_type="auto"
                 )
         
-                file_type = upload["resource_type"]
+                # 🔥 تحديد النوع من الرسالة نفسها (مش من Cloudinary)
+                if isinstance(event.message, ImageMessage):
+                    file_type = "image"
         
-                # 🔥 حل مشكلة الفيديو
-                if file_type == "raw":
+                elif isinstance(event.message, VideoMessage):
                     file_type = "video"
+        
+                else:
+                    file_type = "media"
         
                 commands.insert_one({
                     "group": group_id,
@@ -416,11 +418,11 @@ def handle_message(event):
         
             del waiting[group_id]
         
+            # 🔥 استخدم reply مش push
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text="✅ تم تسجيل الرد")
             )
-
 
 # ================== RUN ==================
 
