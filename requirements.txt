@@ -2,3 +2,4 @@ line-bot-sdk
 pymongo
 dnspython
 flask
+gunicorn
