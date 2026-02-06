@@ -324,10 +324,9 @@ def handle_text(event):
 
 
     # ========= AUTO REPLY =========
-
     results = list(commands.find({
         "group": group_id,
-        "trigger": text
+        "trigger": {"$regex": text, "$options": "i"}
     }))
 
     if not results:
