@@ -144,8 +144,8 @@ def handle_message(event):
 
             elif t == "sticker":
                 msg = StickerSendMessage(
-                    package_id=data["package"],
-                    sticker_id=data["sticker"]
+                    package_id=str(data["package"]),
+                     sticker_id=str(data["sticker"])
                 )
 
             line_bot_api.reply_message(event.reply_token, msg)
