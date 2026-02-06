@@ -1,185 +1,189 @@
-from flask import Flask, request
-import random
-import json
-import re
-from difflib import SequenceMatcher
-from linebot import LineBotApi, WebhookHandler
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import os
+from flask import Flask, request, abort
+
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import *
+
+from pymongo import MongoClient
+
+
+# ====== ENV ======
+LINE_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+LINE_SECRET = os.getenv("LINE_CHANNEL_SECRET")
+MONGO_URL = os.getenv("MONGO_URL")
+
+line_bot_api = LineBotApi(LINE_TOKEN)
+handler = WebhookHandler(LINE_SECRET)
+
+client = MongoClient(MONGO_URL)
+db = client["trigger_bot"]
+collection = db["triggers"]
 
 app = Flask(__name__)
 
-line_bot_api = LineBotApi(os.getenv("CHANNEL_ACCESS_TOKEN"))
-handler = WebhookHandler(os.getenv("CHANNEL_SECRET"))
-OWNER_ID = os.getenv("OWNER_ID")
-admins = [OWNER_ID]
-
-active_games = {}
-games_enabled = True
+waiting_trigger = {}  # الجروبات اللي مستنية ميديا
 
 
-# ================= LOAD JSON =================
-
-def load_json(file, default):
-    try:
-        with open(file, "r") as f:
-            return json.load(f)
-    except:
-        return default
-
-
-questions = load_json("questions.json", [
-    {"q": "ما هو أثقل حيوان؟", "a": "الحوت الأزرق"}
-])
-
-mentions_data = load_json("mentions.json", {
-    "on_mention": ["نعم؟ 😎", "عايز ايه يا نجم؟"],
-    "on_return": ["رجعت اهو 😏"]
-})
-
-
-# ================= SMART ARABIC =================
-
-def normalize(text):
-    text = str(text).lower()
-
-    replacements = {
-        "أ": "ا",
-        "إ": "ا",
-        "آ": "ا",
-        "ة": "ه",
-        "ى": "ي",
-        "ؤ": "و",
-        "ئ": "ي"
-    }
-
-    for k, v in replacements.items():
-        text = text.replace(k, v)
-
-    text = re.sub(r'[^\w\s]', '', text)
-    text = " ".join(text.split())
-
-    return text
-
-
-def similar(a, b):
-    return SequenceMatcher(None, a, b).ratio() > 0.75
-
-
-def is_admin(user):
-    return user in admins
-
-
-# ================= SERVER =================
-
-@app.route("/", methods=['GET'])
-def home():
-    return "BOT IS RUNNING 🔥"
-
-
+# ====== Webhook ======
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
-    handler.handle(body, signature)
+
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
+
     return 'OK'
 
 
-# ================= EVENTS =================
-
-@handler.add(MessageEvent, message=TextMessage)
+# ====== Messages ======
+@handler.add(MessageEvent)
 def handle_message(event):
 
-    user_id = event.source.user_id
-    room_id = getattr(event.source, "group_id", user_id)
+    group_id = getattr(event.source, "group_id", None)
 
-    msg = normalize(event.message.text)
+    if group_id is None:
+        group_id = event.source.user_id  # لو برايفت
 
-    reply = None
+    # ========= TEXT =========
+    if isinstance(event.message, TextMessage):
 
-    # ========= OWNER COMMANDS =========
+        text = event.message.text.strip().lower()
 
-    if msg.startswith("رفع ادمن"):
-        if user_id != OWNER_ID:
-            reply = "❌ الأمر للمالك فقط"
-        else:
-            target = msg.replace("رفع ادمن", "").strip()
-            admins.append(target)
-            reply = "✅ تم رفع الأدمن"
+        # تسجيل امر
+        if text.startswith("طراد سجل"):
 
-    elif msg.startswith("تنزيل ادمن"):
-        if user_id != OWNER_ID:
-            reply = "❌ الأمر للمالك فقط"
-        else:
-            target = msg.replace("تنزيل ادمن", "").strip()
-            if target in admins:
-                admins.remove(target)
-            reply = "✅ تم تنزيل الأدمن"
+            trigger = text.replace("طراد سجل", "").strip()
 
-    # ========= ADMIN =========
+            if not trigger:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="قول الكلمة بعد الامر 😄")
+                )
+                return
 
-    elif msg in ["قفل", "قفل اللعب"]:
-        if not is_admin(user_id):
-            reply = "❌ مش أدمن"
-        else:
-            global games_enabled
-            games_enabled = False
-            reply = "🔒 تم قفل الألعاب"
+            waiting_trigger[group_id] = trigger
 
-    elif msg in ["فتح", "فتح اللعب"]:
-        if not is_admin(user_id):
-            reply = "❌ مش أدمن"
-        else:
-            games_enabled = True
-            reply = "🔓 تم فتح الألعاب"
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    text=f"🔥 ابعت صورة او فيديو او استيكر علشان اربطها بـ ({trigger})"
+                )
+            )
+            return
 
-    elif msg == "حذف":
-        if room_id in active_games:
-            del active_games[room_id]
-            reply = "🗑 تم حذف اللعبة"
-        else:
-            reply = "مفيش لعبة شغالة 😅"
+        # حذف امر
+        if text.startswith("طراد حذف"):
 
-    # ========= GAMES =========
+            trigger = text.replace("طراد حذف", "").strip()
 
-    elif msg in ["سؤال", "سوال"]:
+            collection.delete_one({
+                "group": group_id,
+                "trigger": trigger
+            })
 
-        if not games_enabled:
-            reply = "🚫 الألعاب مقفولة"
-        elif room_id in active_games:
-            reply = "⚠️ في لعبة شغالة بالفعل"
-        else:
-            q = random.choice(questions)
-            active_games[room_id] = q
-            reply = "🧠 سؤال:\n" + q["q"]
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="✅ اتمسح الامر")
+            )
+            return
 
-    # ========= CHECK ANSWER =========
+        # عرض الاوامر
+        if text == "طراد الاوامر":
 
-    elif room_id in active_games:
+            data = collection.find({"group": group_id})
 
-        answer = normalize(active_games[room_id]["a"])
+            triggers = [d["trigger"] for d in data]
 
-        if msg == answer or similar(msg, answer):
-            del active_games[room_id]
-            reply = "🎉 إجابة صحيحة!"
+            if not triggers:
+                msg = "مفيش اوامر متسجلة 😅"
+            else:
+                msg = "🔥 الاوامر:\n\n" + "\n".join(triggers[:50])
 
-    # ========= MENTION =========
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=msg)
+            )
+            return
 
-    elif "@bot" in msg or "بوت" in msg:
-        reply = random.choice(mentions_data["on_mention"])
+        # الرد على التريجر
+        data = collection.find_one({
+            "group": group_id,
+            "trigger": text
+        })
 
-    # ========= DEFAULT =========
+        if data:
 
-    if not reply:
-        if random.random() < 0.03:
-            reply = "انا صاحي اهو 👀"
+            if data["type"] == "image":
+                msg = ImageSendMessage(
+                    original_content_url=data["url"],
+                    preview_image_url=data["url"]
+                )
 
-    if reply:
+            elif data["type"] == "video":
+                msg = VideoSendMessage(
+                    original_content_url=data["url"],
+                    preview_image_url=data["preview"]
+                )
+
+            elif data["type"] == "sticker":
+                msg = StickerSendMessage(
+                    package_id=data["package"],
+                    sticker_id=data["sticker"]
+                )
+
+            line_bot_api.reply_message(event.reply_token, msg)
+            return
+
+    # ========= MEDIA =========
+    if group_id in waiting_trigger:
+
+        trigger = waiting_trigger[group_id]
+
+        # استيكر
+        if isinstance(event.message, StickerMessage):
+
+            collection.insert_one({
+                "group": group_id,
+                "trigger": trigger,
+                "type": "sticker",
+                "package": event.message.package_id,
+                "sticker": event.message.sticker_id
+            })
+
+        # صورة او فيديو
+        elif isinstance(event.message, (ImageMessage, VideoMessage)):
+
+            content = line_bot_api.get_message_content(event.message.id)
+
+            file_path = f"{event.message.id}.dat"
+
+            with open(file_path, "wb") as f:
+                for chunk in content.iter_content():
+                    f.write(chunk)
+
+            # ⚠️ ارفع الملف على Cloudinary او اي Storage
+            url = "PUT_FILE_URL_HERE"
+
+            collection.insert_one({
+                "group": group_id,
+                "trigger": trigger,
+                "type": "image",
+                "url": url,
+                "preview": url
+            })
+
+        del waiting_trigger[group_id]
+
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=reply)
+            TextSendMessage(text=f"✅ اتسجل ({trigger}) بنجاح 🔥")
         )
 
 
+# ====== RUN ======
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=5000)
