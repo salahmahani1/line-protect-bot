@@ -124,7 +124,7 @@ def handle_message(event):
                 )
                 return
         
-            if not event.message.mention:
+            if not event.message.mentions:
                 line_bot_api.reply_message(
                     event.reply_token,
                     TextSendMessage(text="⚠️ منشن الشخص الاول")
@@ -143,7 +143,7 @@ def handle_message(event):
                 event.reply_token,
                 TextSendMessage(text="🔥 تم رفع اونر بنجاح")
             )
-                return
+            return
                 
         # ================== DELETE ==================
 
@@ -188,7 +188,7 @@ def handle_message(event):
                 )
                 return
         
-            if not event.message.mention:
+            if not event.message.mentions:
                 line_bot_api.reply_message(
                     event.reply_token,
                     TextSendMessage(text="⚠️ اعمل منشن للشخص")
@@ -207,7 +207,7 @@ def handle_message(event):
                 event.reply_token,
                 TextSendMessage(text="✅ تم رفع ادمن")
             )
-                return
+            return
 
         # ================== BAN NAME ==================
 
