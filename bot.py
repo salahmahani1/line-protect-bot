@@ -7,25 +7,28 @@ from linebot.models import *
 
 from pymongo import MongoClient
 
+import cloudinary
+import cloudinary.uploader
 
-# ====== ENV ======
-LINE_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-LINE_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-MONGO_URL = os.getenv("MONGO_URL")
 
-line_bot_api = LineBotApi(LINE_TOKEN)
-handler = WebhookHandler(LINE_SECRET)
+# ================= CONFIG =================
 
-client = MongoClient(MONGO_URL)
+line_bot_api = LineBotApi(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
+
+client = MongoClient(os.getenv("MONGO_URL"))
 db = client["trigger_bot"]
 collection = db["triggers"]
 
+cloudinary.config(secure=True)
+
 app = Flask(__name__)
 
-waiting_trigger = {}  # الجروبات اللي مستنية ميديا
+waiting = {}  # الجروب مستني ايه
 
 
-# ====== Webhook ======
+# ================= WEBHOOK =================
+
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -39,46 +42,48 @@ def callback():
     return 'OK'
 
 
-# ====== Messages ======
+# ================= BOT =================
+
 @handler.add(MessageEvent)
 def handle_message(event):
 
     group_id = getattr(event.source, "group_id", None)
 
     if group_id is None:
-        group_id = event.source.user_id  # لو برايفت
+        group_id = event.source.user_id
 
-    # ========= TEXT =========
+    # ================= TEXT =================
+
     if isinstance(event.message, TextMessage):
 
-        text = event.message.text.strip().lower()
+        text = event.message.text.strip()
 
-        # تسجيل امر
+        # تسجيل
         if text.startswith("طراد سجل"):
 
-            trigger = text.replace("طراد سجل", "").strip()
+            trigger = text.replace("طراد سجل", "").strip().lower()
 
             if not trigger:
                 line_bot_api.reply_message(
                     event.reply_token,
-                    TextSendMessage(text="قول الكلمة بعد الامر 😄")
+                    TextSendMessage(text="اكتب اسم الامر بعد (طراد سجل)")
                 )
                 return
 
-            waiting_trigger[group_id] = trigger
+            waiting[group_id] = trigger
 
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(
-                    text=f"🔥 ابعت صورة او فيديو او استيكر علشان اربطها بـ ({trigger})"
+                    text=f"🔥 ابعت نص او صورة او فيديو علشان اربطها بـ ({trigger})"
                 )
             )
             return
 
-        # حذف امر
+        # حذف
         if text.startswith("طراد حذف"):
 
-            trigger = text.replace("طراد حذف", "").strip()
+            trigger = text.replace("طراد حذف", "").strip().lower()
 
             collection.delete_one({
                 "group": group_id,
@@ -91,17 +96,14 @@ def handle_message(event):
             )
             return
 
-        # عرض الاوامر
+        # عرض
         if text == "طراد الاوامر":
 
             data = collection.find({"group": group_id})
 
             triggers = [d["trigger"] for d in data]
 
-            if not triggers:
-                msg = "مفيش اوامر متسجلة 😅"
-            else:
-                msg = "🔥 الاوامر:\n\n" + "\n".join(triggers[:50])
+            msg = "🔥 الاوامر:\n\n" + "\n".join(triggers[:50]) if triggers else "مفيش اوامر"
 
             line_bot_api.reply_message(
                 event.reply_token,
@@ -109,27 +111,38 @@ def handle_message(event):
             )
             return
 
-        # الرد على التريجر
+        # الرد
         data = collection.find_one({
             "group": group_id,
-            "trigger": text
+            "trigger": text.lower()
         })
 
         if data:
 
-            if data["type"] == "image":
+            t = data["type"]
+
+            if t == "text":
+                msg = TextSendMessage(text=data["content"])
+
+            elif t == "image":
                 msg = ImageSendMessage(
                     original_content_url=data["url"],
                     preview_image_url=data["url"]
                 )
 
-            elif data["type"] == "video":
+            elif t == "video":
                 msg = VideoSendMessage(
                     original_content_url=data["url"],
-                    preview_image_url=data["preview"]
+                    preview_image_url=data["url"]
                 )
 
-            elif data["type"] == "sticker":
+            elif t == "file":
+                msg = FileSendMessage(
+                    original_content_url=data["url"],
+                    file_name="file"
+                )
+
+            elif t == "sticker":
                 msg = StickerSendMessage(
                     package_id=data["package"],
                     sticker_id=data["sticker"]
@@ -138,10 +151,31 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, msg)
             return
 
-    # ========= MEDIA =========
-    if group_id in waiting_trigger:
+        # لو مستني نص يتسجل
+        if group_id in waiting:
 
-        trigger = waiting_trigger[group_id]
+            trigger = waiting[group_id]
+
+            collection.insert_one({
+                "group": group_id,
+                "trigger": trigger,
+                "type": "text",
+                "content": text
+            })
+
+            del waiting[group_id]
+
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"✅ اتسجل ({trigger})")
+            )
+            return
+
+    # ================= MEDIA =================
+
+    if group_id in waiting:
+
+        trigger = waiting[group_id]
 
         # استيكر
         if isinstance(event.message, StickerMessage):
@@ -154,9 +188,8 @@ def handle_message(event):
                 "sticker": event.message.sticker_id
             })
 
-        # صورة او فيديو
-        elif isinstance(event.message, (ImageMessage, VideoMessage)):
-
+        else:
+            # تحميل الملف من LINE
             content = line_bot_api.get_message_content(event.message.id)
 
             file_path = f"{event.message.id}.dat"
@@ -165,25 +198,37 @@ def handle_message(event):
                 for chunk in content.iter_content():
                     f.write(chunk)
 
-            # ⚠️ ارفع الملف على Cloudinary او اي Storage
-            url = "PUT_FILE_URL_HERE"
+            # رفع Cloudinary
+            upload = cloudinary.uploader.upload(
+                file_path,
+                resource_type="auto"
+            )
+
+            url = upload["secure_url"]
+
+            media_type = "file"
+
+            if isinstance(event.message, ImageMessage):
+                media_type = "image"
+            elif isinstance(event.message, VideoMessage):
+                media_type = "video"
 
             collection.insert_one({
                 "group": group_id,
                 "trigger": trigger,
-                "type": "image",
-                "url": url,
-                "preview": url
+                "type": media_type,
+                "url": url
             })
 
-        del waiting_trigger[group_id]
+        del waiting[group_id]
 
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"✅ اتسجل ({trigger}) بنجاح 🔥")
+            TextSendMessage(text=f"🔥 اتسجل ({trigger}) بنجاح")
         )
 
 
-# ====== RUN ======
+# ================= RUN =================
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
