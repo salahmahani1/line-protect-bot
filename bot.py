@@ -344,12 +344,21 @@ def handle_message(event):
                 sticker_id=data["sticker"]
             )
 
-        else:
+        elif t == "image":
             msg = ImageSendMessage(
                 original_content_url=data["url"],
                 preview_image_url=data["url"]
             )
-
+        
+        elif t == "video":
+            msg = VideoSendMessage(
+                original_content_url=data["url"],
+                preview_image_url=data["url"]
+            )
+        
+        else:
+            msg = TextSendMessage(text="⚠️ نوع الملف غير معروف")
+        
         line_bot_api.reply_message(event.reply_token, msg)
         return
 
@@ -367,12 +376,14 @@ def handle_message(event):
 
         if isinstance(event.message, StickerMessage):
 
+            file_type = upload["resource_type"]  
+            # هيرجع image أو video
+            
             commands.insert_one({
                 "group": group_id,
                 "trigger": trigger,
-                "type": "sticker",
-                "package": str(event.message.package_id),
-                "sticker": str(event.message.sticker_id)
+                "type": file_type,
+                "url": upload["secure_url"]
             })
 
         else:
