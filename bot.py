@@ -171,61 +171,62 @@ def handle_message(event):
             )
             return
 
-    # ================= MEDIA =================
-
+    # ================= MEDIA =================# ================= MEDIA =================
     if group_id in waiting:
-
         trigger = waiting[group_id]
 
-        # استيكر
-        if isinstance(event.message, StickerMessage):
+    # استيكر
+    if isinstance(event.message, StickerMessage):
 
-            collection.insert_one({
-                "group": group_id,
-                "trigger": trigger,
-                "type": "sticker",
-                "package": event.message.package_id,
-                "sticker": event.message.sticker_id
-            })
+        collection.insert_one({
+            "group": group_id,
+            "trigger": trigger,
+            "type": "sticker",
+            "package": str(event.message.package_id),
+            "sticker": str(event.message.sticker_id)
+        })
 
-        else:
-            # تحميل الملف من LINE
-            content = line_bot_api.get_message_content(event.message.id)
+    else:
+        content = line_bot_api.get_message_content(event.message.id)
 
-            file_path = f"{event.message.id}.dat"
+        file_path = f"{event.message.id}.dat"
 
-            with open(file_path, "wb") as f:
-                for chunk in content.iter_content():
-                    f.write(chunk)
+        with open(file_path, "wb") as f:
+            for chunk in content.iter_content():
+                f.write(chunk)
 
-            # رفع Cloudinary
-            upload = cloudinary.uploader.upload(
-                file_path,
-                resource_type="auto"
-            )
-
-            url = upload["secure_url"]
-
-            media_type = "file"
-
-            if isinstance(event.message, ImageMessage):
-                media_type = "image"
-            elif isinstance(event.message, VideoMessage):
-                media_type = "video"
-
-            collection.insert_one({
-                "group": group_id,
-                "trigger": trigger,
-                "type": media_type,
-                "url": url
-            })
-
-        del waiting[group_id]
-
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=f"🔥 اتسجل ({trigger}) بنجاح")
+        upload = cloudinary.uploader.upload(
+            file_path,
+            resource_type="auto"
         )
+
+        url = upload["secure_url"]
+
+        media_type = "file"
+
+        if isinstance(event.message, ImageMessage):
+            media_type = "image"
+
+        elif isinstance(event.message, VideoMessage):
+            media_type = "video"
+
+        collection.insert_one({
+            "group": group_id,
+            "trigger": trigger,
+            "type": media_type,
+            "url": url
+        })
+
+        os.remove(file_path)  # مهم
+
+    del waiting[group_id]
+
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=f"🔥 اتسجل ({trigger})")
+    )
+
+
 
 
 # ================= RUN =================
