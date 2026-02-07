@@ -65,9 +65,18 @@ def is_admin(user):
 
 
 def banned(trigger):
+
+    # نشيل المسافات ونخلي الحروف small
+    trigger = trigger.lower().replace(" ", "")
+
     for b in banned_names.find():
-        if b["name"] in trigger:
+
+        banned_word = b["name"].lower().replace(" ", "")
+
+        # يمنع لو الاسم جه في أي جزء
+        if banned_word in trigger:
             return True
+
     return False
 
 
@@ -349,7 +358,7 @@ def handle_text(event):
         if banned(trigger):
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="🚫 الاسم محظور")
+                TextSendMessage(text="🚫 الكلمة دي ممنوعة من التسجيل")
             )
             return
     
