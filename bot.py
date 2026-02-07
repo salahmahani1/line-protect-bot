@@ -188,23 +188,55 @@ def handle_text(event):
         return
 
 
-    # ========= DELETE =========
-
+    # ================== DELETE ==================
+    
     if text.startswith("طراد حذف"):
-
+    
         trigger = text.replace("طراد حذف", "").strip()
-
+    
+        # 🔥 لو فاضي -> شرح الطريقة
+        if not trigger:
+    
+            msg = """
+    ⚠️ طريقة الحذف:
+    
+    🗑 حذف رد:
+    طراد حذف + الكلمة
+    
+    مثال:
+    طراد حذف هلا
+    
+    ✔️ هيتم حذف كل الردود المرتبطة بالكلمة.
+    
+    ــــــــــــــــــ
+    
+    📌 طريقة التسجيل:
+    طراد سجل + الكلمة
+    """
+    
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=msg)
+            )
+            return
+    
+    
         result = commands.delete_many({
             "group": group_id,
             "trigger": trigger
         })
-
+    
+        if result.deleted_count == 0:
+            msg = "❌ مفيش ردود بالكلمة دي"
+        else:
+            msg = f"✅ تم حذف {result.deleted_count} رد"
+    
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"تم حذف {result.deleted_count}")
+            TextSendMessage(text=msg)
         )
+    
         return
-
 
     # ========= BAN =========
 
