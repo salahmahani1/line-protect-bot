@@ -428,6 +428,28 @@ def handle_media(event):
     )
 
 
+# ================== BOT KICKED ==================
+
+@handler.add(LeaveEvent)
+def handle_leave(event):
+
+    if event.source.type == "group":
+        gid = event.source.group_id
+
+    elif event.source.type == "room":
+        gid = event.source.room_id
+
+    else:
+        return
+
+    # حذف أوامر الجروب
+    deleted = commands.delete_many({"group": gid})
+
+    # حذف أي تسجيل معلق
+    waiting.pop(gid, None)
+
+    print(f"🔥 Bot left -> Deleted {deleted.deleted_count} commands from {gid}")
+
 # ================= RUN =================
 
 if __name__ == "__main__":
