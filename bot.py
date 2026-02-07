@@ -339,7 +339,8 @@ def handle_text(event):
     if not results:
         return
 
-    data = random.choice(results)
+    data = random.choice(results)   # 🔥 هنا السر
+    t = data["type"]
 
     if data["type"] == "text":
         msg = TextSendMessage(text=data["content"])
