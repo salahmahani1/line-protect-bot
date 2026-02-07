@@ -273,27 +273,63 @@ def handle_text(event):
         return
 
 
-    # ========= REGISTER =========
-
+    # ================== REGISTER ==================
+    
     if text.startswith("طراد سجل"):
-
+    
         trigger = text.replace("طراد سجل", "").strip()
-
+    
+        # 🔥 لو فاضي -> اشرحله الطريقة
+        if not trigger:
+    
+            msg = """
+    ⚠️ طريقة التسجيل:
+    
+    📌 تسجيل رد:
+    طراد سجل + الكلمة
+    
+    مثال:
+    طراد سجل هلا
+    
+    وبعدها ابعت:
+    نص / صورة / فيديو / استيكر
+    
+    🔥 تقدر تسجل أكتر من رد
+    والبوت يختار عشوائي.
+    
+    ــــــــــــــــــ
+    
+    🗑 طريقة الحذف:
+    طراد حذف + الكلمة
+    
+    مثال:
+    طراد حذف هلا
+            """
+    
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=msg)
+            )
+            return
+    
+    
+        # ✅ بعد كدا يفحص الحظر
         if banned(trigger):
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="الاسم محظور")
+                TextSendMessage(text="🚫 الاسم محظور")
             )
             return
-
+    
+    
         waiting[group_id] = {
             "trigger": trigger,
             "user": user_id
         }
-
+    
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="ابعت الرد 👍")
+            TextSendMessage(text="👍 ابعت الرد")
         )
         return
 
